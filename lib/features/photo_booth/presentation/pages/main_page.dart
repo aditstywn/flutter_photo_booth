@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/extensions/build_context_ext.dart';
 import '../../../setting/data/datasource/custom_button_local_datasource.dart';
 import '../../../setting/data/datasource/custom_frame_local_datasource.dart';
+import '../../../setting/data/datasource/voucher_local_datasource.dart';
 import '../../../setting/data/models/request/button_area.dart';
+import '../../../setting/presentatio/pages/voucher_input_page.dart';
 import '../widgets/build_tappable_area.dart';
 import 'template_page.dart';
 
@@ -109,8 +111,28 @@ class _MainPageState extends State<MainPage> {
                           return buildTappableArea(
                             area: area,
                             constraints: stackConstraints,
-                            onTap: () {
-                              context.push(TemplatePage());
+                            onTap: () async {
+                              final voucherDatasource =
+                                  VoucherLocalDatasource();
+                              final isVoucherRequired = await voucherDatasource
+                                  .isVoucherRequired();
+
+                              if (isVoucherRequired) {
+                                if (context.mounted) {
+                                  final result = await context.push(
+                                    const VoucherInputPage(),
+                                  );
+                                  if (result == true) {
+                                    if (context.mounted) {
+                                      context.push(TemplatePage());
+                                    }
+                                  }
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  context.push(TemplatePage());
+                                }
+                              }
                             },
                           );
                         }),

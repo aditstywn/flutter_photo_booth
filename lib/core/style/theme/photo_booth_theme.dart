@@ -7,7 +7,7 @@ class PhotoBoothTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       colorSchemeSeed: ColorsApp.primary,
-      scaffoldBackgroundColor: Color(0xFFFAFAFA),
+      scaffoldBackgroundColor: Color(0xFFfaf9f5),
       brightness: Brightness.light,
       fontFamily: GoogleFonts.lato().fontFamily,
       appBarTheme: _appBarTheme,
@@ -17,12 +17,12 @@ class PhotoBoothTheme {
 
   static AppBarTheme get _appBarTheme {
     return AppBarTheme(
-      backgroundColor: ColorsApp.white,
-      foregroundColor: ColorsApp.primary,
+      backgroundColor: ColorsApp.primary,
+      foregroundColor: ColorsApp.white,
       titleTextStyle: TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.bold,
-        color: ColorsApp.primary,
+        color: ColorsApp.white,
       ),
       centerTitle: true,
     );

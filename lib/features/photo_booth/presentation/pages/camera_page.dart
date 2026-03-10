@@ -551,20 +551,6 @@ class _CameraPageState extends State<CameraPage> {
           uploadedPhotos: _uploadedPhotos,
         ),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.photo_library, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Semua $totalPhotos foto berhasil diambil!'),
-            ],
-          ),
-          backgroundColor: Color(0xFF00B894),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
-        ),
-      );
     }
   }
 

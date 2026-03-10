@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_photo_booth/core/component/space.dart';
 import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
 
+import '../../../../core/style/color/colors_app.dart';
 import '../../data/datasource/frame_template_local_datasource.dart';
 import '../../data/models/request/frame_template.dart';
 import 'create_frame_template.dart';
@@ -51,7 +52,7 @@ class _FrameTemplateListPageState extends State<FrameTemplateListPage> {
         onPressed: _navigateToCreateTemplate,
         icon: Icon(Icons.add),
         label: Text('Add Template'),
-        backgroundColor: Color(0xFF00B8D4),
+        backgroundColor: ColorsApp.primary,
         foregroundColor: Colors.white,
       ),
     );
@@ -101,10 +102,19 @@ class _FrameTemplateListPageState extends State<FrameTemplateListPage> {
     final frameFile = File(template.framePath);
     final frameExists = frameFile.existsSync();
 
-    return Card(
+    return Container(
       margin: EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: ColorsApp.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(20),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: () => _navigateToEditTemplate(template),
         borderRadius: BorderRadius.circular(16),
@@ -112,30 +122,29 @@ class _FrameTemplateListPageState extends State<FrameTemplateListPage> {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              // Preview Frame
               Container(
-                width: 100,
-                height: 120,
+                width: 80,
+                height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
+                  color: ColorsApp.primary.withAlpha(50),
+                  borderRadius: BorderRadius.circular(120),
                   border: Border.all(color: Colors.grey[300]!, width: 2),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(120),
                   child: frameExists
                       ? Image.file(frameFile, fit: BoxFit.cover)
                       : Center(
                           child: Icon(
                             Icons.broken_image,
-                            color: Colors.grey[400],
+                            color: ColorsApp.primary,
                             size: 40,
                           ),
                         ),
                 ),
               ),
               SpaceWidth(16),
-              // Info Template
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,8 +152,9 @@ class _FrameTemplateListPageState extends State<FrameTemplateListPage> {
                     Text(
                       template.name,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: ColorsApp.primary,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -155,59 +165,39 @@ class _FrameTemplateListPageState extends State<FrameTemplateListPage> {
                         Icon(
                           Icons.photo_library,
                           size: 16,
-                          color: Colors.grey[600],
+                          color: ColorsApp.primary,
                         ),
                         SpaceWidth(4),
                         Text(
-                          '${template.numberOfPhotoStrips} Photo${template.numberOfPhotoStrips > 1 ? 's' : ''}',
+                          '${template.numberOfPhotoStrips} Photo${template.numberOfPhotoStrips > 1 ? 's' : ''}, ${template.photoAreas.length} Area${template.photoAreas.length > 1 ? 's' : ''}',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: ColorsApp.textSecondary,
                           ),
                         ),
                       ],
                     ),
-                    SpaceHeight(4),
-                    Row(
-                      children: [
-                        Icon(Icons.grid_on, size: 16, color: Colors.grey[600]),
-                        SpaceWidth(4),
-                        Text(
-                          '${template.photoAreas.length} Area${template.photoAreas.length > 1 ? 's' : ''}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color:
-                                template.photoAreas.length ==
-                                    template.numberOfPhotoStrips
-                                ? Colors.green
-                                : Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+
                     SpaceHeight(8),
                     Text(
-                      'Updated: ${_formatDate(template.updatedAt)}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      _formatDate(template.updatedAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: ColorsApp.textSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
-              // Action Buttons
-              Column(
-                children: [
-                  IconButton(
-                    onPressed: () => _navigateToEditTemplate(template),
-                    icon: Icon(Icons.edit, color: Color(0xFF00B8D4)),
-                    tooltip: 'Edit',
-                  ),
-                  IconButton(
-                    onPressed: () => _showDeleteConfirmation(template),
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    tooltip: 'Delete',
-                  ),
-                ],
+              InkWell(
+                onTap: () => _navigateToEditTemplate(template),
+                child: Icon(Icons.edit, color: ColorsApp.primary, size: 20),
+              ),
+              SpaceWidth(12),
+              InkWell(
+                onTap: () => _showDeleteConfirmation(template),
+                child: Icon(Icons.delete, color: ColorsApp.primary, size: 20),
               ),
             ],
           ),

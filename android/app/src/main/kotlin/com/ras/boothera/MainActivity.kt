@@ -1,4 +1,4 @@
-package com.example.flutter_photo_booth
+package com.ras.boothera
 
 import io.flutter.embedding.android.FlutterActivity
 

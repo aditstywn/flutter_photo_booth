@@ -72,13 +72,15 @@ class PrinterDatasource {
           settings,
         );
 
-        bytes.addAll(generator.imageRaster(processed, align: PosAlign.center));
+        bytes.addAll(generator.feed(2));
         // bytes.addAll(generator.emptyLines(1));
+
+        bytes.addAll(generator.imageRaster(processed, align: PosAlign.center));
+
+        // bytes.addAll(generator.emptyLines(1));
+        // bytes.addAll(generator.feed(1));
       }
 
-      bytes.addAll(
-        generator.feed(2),
-      ); // Menambahkan satu baris kosong setelah gambar
       bytes.addAll(
         generator.cut(),
       ); // Memotong kertas setelah mencetak, jika printer mendukung fitur ini

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/style/color/colors_app.dart';
+
 class SettingMenuCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -20,15 +22,15 @@ class SettingMenuCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: color.withAlpha(50),
+              color: Colors.grey.withAlpha(50),
               blurRadius: 15,
               offset: Offset(0, 8),
             ),
@@ -39,10 +41,10 @@ class SettingMenuCard extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: color.withAlpha(50),
-                borderRadius: BorderRadius.circular(16),
+                color: ColorsApp.primary,
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 32, color: color),
+              child: Icon(icon, size: 32, color: Colors.white),
             ),
             SizedBox(width: 16),
             Expanded(
@@ -54,7 +56,7 @@ class SettingMenuCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D3436),
+                      color: ColorsApp.black,
                     ),
                   ),
                   SizedBox(height: 4),
@@ -62,14 +64,14 @@ class SettingMenuCard extends StatelessWidget {
                     subtitle,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF636E72),
+                      color: ColorsApp.textSecondary,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, color: color, size: 20),
+            Icon(Icons.arrow_forward_ios, color: ColorsApp.primary, size: 20),
           ],
         ),
       ),

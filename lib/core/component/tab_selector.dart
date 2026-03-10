@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_photo_booth/core/component/space.dart';
 
+import '../style/color/colors_app.dart';
+
 class TabItem {
   final String id;
   final String label;
@@ -53,8 +55,8 @@ class ScrollableHorizontalTabSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultSelectedColor = selectedColor ?? Color(0xFF5F72EB);
-    final defaultUnselectedColor = unselectedColor ?? Colors.white;
+    final defaultSelectedColor = selectedColor ?? ColorsApp.primary;
+    final defaultUnselectedColor = unselectedColor ?? ColorsApp.white;
     final defaultBorderColor = borderColor ?? defaultSelectedColor;
 
     return Container(

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 Color getColorForFunction(String function) {
   switch (function) {
     case 'Start':
-      return Color.fromARGB(255, 215, 230, 16);
-    case 'Camera Preview':
+      return Color.fromARGB(255, 230, 246, 4);
+    case 'Camera':
       return Color(0xFF00B894);
     case 'Take Photo':
       return Color(0xFF5F72EB);
@@ -15,7 +15,7 @@ Color getColorForFunction(String function) {
       return Color(0xFFFF6B6B);
     case 'Print':
       return Color(0xFF5F72EB);
-    case 'Scan QR':
+    case 'Share':
       return Color(0xFF00B894);
     default:
       return Color(0xFF636E72);
@@ -26,7 +26,7 @@ IconData getIconForFunction(String function) {
   switch (function) {
     case 'Start':
       return Icons.play_arrow;
-    case 'Camera Preview':
+    case 'Camera':
       return Icons.camera_alt;
     case 'Take Photo':
       return Icons.camera;
@@ -37,8 +37,8 @@ IconData getIconForFunction(String function) {
       return Icons.refresh;
     case 'Print':
       return Icons.print;
-    case 'Scan QR':
-      return Icons.qr_code_scanner;
+    case 'Share':
+      return Icons.share;
     default:
       return Icons.touch_app;
   }

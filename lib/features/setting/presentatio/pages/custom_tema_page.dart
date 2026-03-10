@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/component/space.dart';
+import '../../../../core/style/color/colors_app.dart';
 import '../widgets/build_frame_card.dart';
 
 class CustomTemaPage extends StatefulWidget {
@@ -45,40 +46,42 @@ class _CustomTemaPageState extends State<CustomTemaPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Custom Tema')),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          BuildFrameCard(
-            title: 'Frame Utama',
-            subtitle: 'Frame pembuka/welcome screen',
-            icon: Icons.home_rounded,
-            color: Color(0xFF5F72EB),
-            frame: _mainFrame,
-            onUpload: () => _pickFrame('main'),
-            onDelete: () => _deleteFrame('main'),
-          ),
-          SpaceHeight(16),
-          BuildFrameCard(
-            title: 'Frame Kamera',
-            subtitle: 'Frame untuk foto kamera',
-            icon: Icons.camera_alt_rounded,
-            color: Color(0xFF00B894),
-            frame: _cameraFrame,
-            onUpload: () => _pickFrame('camera'),
-            onDelete: () => _deleteFrame('camera'),
-          ),
-          SpaceHeight(16),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.all(16),
+          children: [
+            BuildFrameCard(
+              title: 'Frame Utama',
+              subtitle: 'Frame pembuka/welcome screen',
+              icon: Icons.home_rounded,
+              color: Color(0xFF5F72EB),
+              frame: _mainFrame,
+              onUpload: () => _pickFrame('main'),
+              onDelete: () => _deleteFrame('main'),
+            ),
+            SpaceHeight(16),
+            BuildFrameCard(
+              title: 'Frame Kamera',
+              subtitle: 'Frame untuk foto kamera',
+              icon: Icons.camera_alt_rounded,
+              color: Color(0xFF00B894),
+              frame: _cameraFrame,
+              onUpload: () => _pickFrame('camera'),
+              onDelete: () => _deleteFrame('camera'),
+            ),
+            SpaceHeight(16),
 
-          BuildFrameCard(
-            title: 'Frame Hasil',
-            subtitle: 'Frame untuk hasil foto',
-            icon: Icons.check_circle_rounded,
-            color: Color(0xFFFF6B6B),
-            frame: _resultFrame,
-            onUpload: () => _pickFrame('result'),
-            onDelete: () => _deleteFrame('result'),
-          ),
-        ],
+            BuildFrameCard(
+              title: 'Frame Hasil',
+              subtitle: 'Frame untuk hasil foto',
+              icon: Icons.check_circle_rounded,
+              color: Color(0xFFFF6B6B),
+              frame: _resultFrame,
+              onUpload: () => _pickFrame('result'),
+              onDelete: () => _deleteFrame('result'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -138,12 +141,22 @@ class _CustomTemaPageState extends State<CustomTemaPage> {
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Hapus Frame'),
-        content: Text('Yakin ingin menghapus frame ini?'),
+        title: Text(
+          'Hapus Frame',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ColorsApp.primary,
+          ),
+        ),
+        content: Text(
+          'Yakin ingin menghapus frame ini?',
+          style: TextStyle(color: ColorsApp.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Batal'),
+            child: Text('Batal', style: TextStyle(color: ColorsApp.primary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -151,7 +164,7 @@ class _CustomTemaPageState extends State<CustomTemaPage> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: Text('Hapus'),
+            child: Text('Hapus', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

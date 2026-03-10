@@ -169,7 +169,7 @@ class _CustomButtonTemaPageState extends State<CustomButtonTemaPage> {
                 _buildFunctionChip('Preview'),
                 _buildFunctionChip('Retake'),
                 _buildFunctionChip('Print'),
-                _buildFunctionChip('Scan QR'),
+                _buildFunctionChip('Share'),
               ],
             ],
           ),
@@ -251,6 +251,7 @@ class _CustomButtonTemaPageState extends State<CustomButtonTemaPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey[300]!, width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(20),

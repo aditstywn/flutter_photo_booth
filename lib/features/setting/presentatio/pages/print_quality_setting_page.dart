@@ -84,9 +84,18 @@ class _PrintQualitySettingPageState extends State<PrintQualitySettingPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset ke Default?'),
+        backgroundColor: ColorsApp.white,
+        title: const Text(
+          'Reset ke Default?',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ColorsApp.primary,
+          ),
+        ),
         content: const Text(
           'Semua pengaturan akan kembali ke nilai default (Sangat Cerah).',
+          style: TextStyle(color: ColorsApp.textSecondary),
         ),
         actions: [
           TextButton(
@@ -96,7 +105,7 @@ class _PrintQualitySettingPageState extends State<PrintQualitySettingPage> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reset'),
+            child: const Text('Reset', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

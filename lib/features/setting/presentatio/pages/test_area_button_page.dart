@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
+import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:gal/gal.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +18,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/component/space.dart';
 import '../../../../core/component/tab_selector.dart';
+import '../../../../core/style/color/colors_app.dart';
 import '../../data/datasource/custom_button_local_datasource.dart';
 import '../../data/datasource/custom_frame_local_datasource.dart';
 import '../../data/datasource/frame_template_local_datasource.dart';
@@ -55,7 +60,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
   bool _isCameraInitialized = false;
 
   // Photo capture variables
-  Map<int, File> _uploadedPhotos = {}; // indeks -> file foto
+  final Map<int, File> _uploadedPhotos = {}; // indeks -> file foto
   int _countdownValue = 0; // 0 = tidak countdown
   int _countdownPhotoIndex = 0; // foto ke-berapa yang sedang di-countdown
 
@@ -65,6 +70,8 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
   // final ImagePicker _picker = ImagePicker();
 
   final GlobalKey _compositeKey = GlobalKey();
+
+  bool _loading = false;
 
   @override
   void initState() {
@@ -85,8 +92,10 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
     try {
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
+        // Gunakan kamera depan (index 1) jika ada, jika tidak gunakan kamera belakang (index 0)
+        final cameraIndex = _cameras.length > 1 ? 1 : 0;
         _cameraController = CameraController(
-          _cameras[1], // Gunakan kamera depan (selfie)
+          _cameras[cameraIndex],
           ResolutionPreset.high,
           enableAudio: false,
         );
@@ -98,7 +107,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
         }
       }
     } catch (e) {
-      print('Error initializing camera: $e');
+      debugPrint('Error initializing camera: $e');
     }
   }
 
@@ -206,11 +215,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
             borderRadius: 8,
             margin: EdgeInsets.zero,
             items: [
-              TabItem(
-                id: 'landing',
-                label: 'Landing ',
-                icon: Icons.home_rounded,
-              ),
+              TabItem(id: 'main', label: 'Landing ', icon: Icons.home_rounded),
 
               TabItem(
                 id: 'template',
@@ -334,6 +339,28 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                             isResultPreview: true,
                             constraints: stackConstraints,
                           ),
+                        if (_loading)
+                          Container(
+                            color: Colors.transparent,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Mencetak...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ..._buttonAreasResult.map((area) {
                           return _buildTappableArea(
                             area: area,
@@ -404,7 +431,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Color(0xFF00B8D4),
+              color: ColorsApp.primary,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -428,7 +455,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                   },
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: Color(0xFF00B8D4),
+                    foregroundColor: ColorsApp.primary,
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   child: Text('Lanjut Ambil Foto'),
@@ -468,14 +495,6 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
           _templateImageSize = null; // reset lalu muat ulang
         });
         _loadTemplateImageSize(template.framePath);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Template "${template.name}" dipilih'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 1),
-            backgroundColor: Color(0xFF00B8D4),
-          ),
-        );
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -483,7 +502,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? Color(0xFF00B8D4) : Colors.grey[300]!,
+            color: isSelected ? ColorsApp.primary : Colors.grey[300]!,
             width: isSelected ? 3 : 1,
           ),
           boxShadow: [
@@ -547,7 +566,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                       margin: EdgeInsets.only(top: 8),
                       padding: EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: Color(0xFF00B8D4),
+                        color: ColorsApp.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Center(
@@ -637,11 +656,27 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       return;
     }
 
+    if (function == 'Share') {
+      if (_uploadedPhotos.isEmpty) {
+        context.showAlertError(message: 'Belum ada foto untuk dibagikan');
+        return;
+      }
+
+      _saveCompositeImage();
+
+      return;
+    }
+
     // Jika Retake, tampilkan dialog retake
     if (function == 'Retake') {
       _handleRetake();
       return;
     }
+
+    // if (function == 'Print') {
+    //   _createVideoFromPhotos();
+    //   return;
+    // }
 
     String message;
     Color backgroundColor;
@@ -663,10 +698,10 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
         backgroundColor = Color(0xFF5F72EB);
         icon = Icons.print;
         break;
-      case 'Scan QR':
-        message = 'Scan QR - Scan QR code untuk mendapatkan foto';
+      case 'Share':
+        message = 'Share - Berbagi foto';
         backgroundColor = Color(0xFF00B894);
-        icon = Icons.qr_code_scanner;
+        icon = Icons.share;
         break;
       default:
         message = function;
@@ -1327,7 +1362,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       // Simpan ke perangkat
       final directory = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final imagePath = '${directory.path}/photoboot_${timestamp}.png';
+      final imagePath = '${directory.path}/photoboot_$timestamp.png';
 
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(pngBytes);
@@ -1340,294 +1375,594 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       // Simpan setiap foto individual yang dipakai ke galeri
       for (int i = 0; i < (_selectedTemplate?.numberOfPhotoStrips ?? 1); i++) {
         if (_uploadedPhotos.containsKey(i)) {
-          await Gal.putImage(
-            _uploadedPhotos[i]!.path,
-            album: 'PhotoBoot Results',
-          );
+          await Gal.putImage(_uploadedPhotos[i]!.path, album: 'Boothera');
         }
       }
 
       // Simpan hasil komposit ke galeri
-      await Gal.putImage(imageFile.path, album: 'PhotoBoot Results');
+      await Gal.putImage(imageFile.path, album: 'Boothera');
+
+      String? videoPath = await _createVideoFromPhotos();
 
       // Simpan hanya 50 hasil terakhir
-      if (recentResults.length > 50) {
-        recentResults = recentResults.take(50).toList();
-      }
+      // if (recentResults.length > 50) {
+      //   recentResults = recentResults.take(50).toList();
+      // }
 
-      await prefs.setStringList('recent_results', recentResults);
+      // await prefs.setStringList('recent_results', recentResults);
 
-      if (mounted) {
-        // Tampilkan dialog sukses dengan pratinjau & form WA
-        showDialog(
-          context: context,
-          builder: (dialogContext) {
-            final waController = TextEditingController();
-            bool isSendingWa = false;
-            return StatefulBuilder(
-              builder: (context, setDialogState) {
-                return AlertDialog(
-                  backgroundColor: Color(0xFF2A2A3E),
-                  title: Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 28),
-                      SpaceWidth(12),
-                      Text('Tersimpan!', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+      if (videoPath != null && imageFile.existsSync()) {
+        if (mounted) {
+          // Tampilkan dialog sukses dengan pratinjau & form WA
+          showDialog(
+            context: context,
+            builder: (dialogContext) {
+              final waController = TextEditingController();
+              bool isSendingWa = false;
+              return StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return AlertDialog(
+                    backgroundColor: Color(0xFF2A2A3E),
+                    title: Row(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            imageFile,
-                            height: 180,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        SpaceHeight(16),
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.check, color: Colors.green, size: 14),
-                              SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Gambar berhasil disimpan',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SpaceHeight(20),
-                        Divider(color: Colors.white24),
-                        SpaceHeight(12),
-                        Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: Color(0xFF25D366),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'W',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Kirim ke WhatsApp',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SpaceHeight(10),
-                        TextField(
-                          controller: waController,
-                          keyboardType: TextInputType.phone,
-                          style: TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'Contoh: 628123456789',
-                            hintStyle: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.phone,
-                              color: Color(0xFF25D366),
-                              size: 20,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: Colors.white24),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: Color(0xFF25D366)),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white10,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                        SpaceHeight(8),
+                        Icon(Icons.check_circle, color: Colors.green, size: 28),
+                        SpaceWidth(12),
                         Text(
-                          'Masukkan nomor WA dengan kode negara (tanpa +)',
-                          style: TextStyle(color: Colors.grey, fontSize: 10),
-                        ),
-                        SpaceHeight(10),
-                        Container(
-                          padding: EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF25D366).withAlpha(30),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Color(0xFF25D366).withAlpha(80),
-                            ),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                color: Color(0xFF25D366),
-                                size: 14,
-                              ),
-                              SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Foto otomatis disimpan ke Galeri.\nBuka WA → ketuk lampiran (📎) → pilih dari Galeri.',
-                                  style: TextStyle(
-                                    color: Color(0xFF25D366),
-                                    fontSize: 10,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          'Tersimpan!',
+                          style: TextStyle(color: Colors.white),
                         ),
                       ],
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pop(context, true);
-                      },
-                      child: Text(
-                        'Tutup',
-                        style: TextStyle(color: Colors.grey),
+                    content: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              imageFile,
+                              height: 180,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          SpaceHeight(16),
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white10,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.check,
+                                  color: Colors.green,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Gambar berhasil disimpan',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ...[
+                            SpaceHeight(12),
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check,
+                                    color: Colors.green,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Video gif berhasil disimpan',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          SpaceHeight(20),
+                          Divider(color: Colors.white24),
+                          SpaceHeight(12),
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF25D366),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'W',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Kirim ke WhatsApp',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SpaceHeight(10),
+                          TextField(
+                            controller: waController,
+                            keyboardType: TextInputType.phone,
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Contoh: 628123456789',
+                              hintStyle: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.phone,
+                                color: Color(0xFF25D366),
+                                size: 20,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: Colors.white24),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF25D366),
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white10,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                          SpaceHeight(8),
+                          Text(
+                            'Masukkan nomor WA dengan kode negara (tanpa +)',
+                            style: TextStyle(color: Colors.grey, fontSize: 10),
+                          ),
+                          SpaceHeight(10),
+                          Container(
+                            padding: EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF25D366).withAlpha(30),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Color(0xFF25D366).withAlpha(80),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Color(0xFF25D366),
+                                  size: 14,
+                                ),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Foto otomatis disimpan ke Galeri.\nBuka WA → ketuk lampiran (📎) → pilih dari Galeri.',
+                                    style: TextStyle(
+                                      color: Color(0xFF25D366),
+                                      fontSize: 10,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: isSendingWa
-                          ? null
-                          : () async {
-                              final rawNumber = waController.text
-                                  .trim()
-                                  .replaceAll(RegExp(r'[^0-9]'), '');
-                              if (rawNumber.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Masukkan nomor WhatsApp'),
-                                    backgroundColor: Colors.orange,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                                return;
-                              }
-                              setDialogState(() => isSendingWa = true);
-                              try {
-                                // Buka WhatsApp langsung ke chat nomor
-                                // (berfungsi meski nomor tidak ada di kontak)
-                                final waUrl = Uri.parse(
-                                  'whatsapp://send?phone=$rawNumber&text=Foto+dari+Photo+Booth',
-                                );
-                                if (await canLaunchUrl(waUrl)) {
-                                  await launchUrl(
-                                    waUrl,
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                  // Reminder untuk attach foto
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Ketuk 📎 di WA → pilih foto dari Galeri',
-                                        ),
-                                        backgroundColor: Color(0xFF25D366),
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: 5),
-                                      ),
-                                    );
-                                  }
-                                } else {
-                                  // WA tidak terinstall, fallback ke share sheet
-                                  await Share.shareXFiles([
-                                    XFile(imagePath),
-                                  ], text: 'Foto dari Photo Booth');
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.pop(context, true);
+                        },
+                        child: Text(
+                          'Tutup',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: isSendingWa
+                            ? null
+                            : () async {
+                                final rawNumber = waController.text
+                                    .trim()
+                                    .replaceAll(RegExp(r'[^0-9]'), '');
+                                if (rawNumber.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: Colors.red,
+                                      content: Text('Masukkan nomor WhatsApp'),
+                                      backgroundColor: Colors.orange,
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
+                                  return;
                                 }
-                              } finally {
-                                setDialogState(() => isSendingWa = false);
-                              }
-                            },
-                      icon: isSendingWa
-                          ? SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Icon(Icons.send, size: 16),
-                      label: Text('Buka WA'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF25D366),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                                setDialogState(() => isSendingWa = true);
+                                try {
+                                  // Buka WhatsApp langsung ke chat nomor
+                                  // (berfungsi meski nomor tidak ada di kontak)
+                                  final waUrl = Uri.parse(
+                                    'whatsapp://send?phone=$rawNumber&text=Foto+dari+Photo+Booth',
+                                  );
+                                  if (await canLaunchUrl(waUrl)) {
+                                    await launchUrl(
+                                      waUrl,
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                    // Reminder untuk attach foto
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Ketuk 📎 di WA → pilih foto dari Galeri',
+                                          ),
+                                          backgroundColor: Color(0xFF25D366),
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: Duration(seconds: 5),
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    // WA tidak terinstall, fallback ke share sheet
+                                    await Share.shareXFiles([
+                                      XFile(imagePath),
+                                    ], text: 'Foto dari Photo Booth');
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error: $e'),
+                                        backgroundColor: Colors.red,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  setDialogState(() => isSendingWa = false);
+                                }
+                              },
+                        icon: isSendingWa
+                            ? SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Icon(Icons.send, size: 16),
+                        label: Text('Buka WA'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
+                    ],
+                  );
+                },
+              );
+            },
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        print('Error saving image: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving image: $e'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
-        );
+        context.showAlertError(message: 'Gagal menyimpan gambar: $e');
       }
     }
   }
+
+  // Future<String?> createGif() async {
+  //   try {
+  //     if (_uploadedPhotos.isEmpty) return null;
+
+  //     setState(() {
+  //       _loading = true;
+  //     });
+
+  //     final encoder = img.GifEncoder();
+
+  //     /// decode semua foto sekali saja
+  //     List<img.Image> frames = [];
+
+  //     for (var photo in _uploadedPhotos.values) {
+  //       final bytes = await photo.readAsBytes();
+  //       final decoded = img.decodeImage(bytes);
+
+  //       if (decoded != null) {
+  //         /// resize supaya proses cepat
+  //         final resized = img.copyResize(decoded, width: 1080);
+  //         frames.add(resized);
+  //       }
+  //     }
+
+  //     /// loop 5x tanpa decode ulang
+  //     for (int i = 0; i < 3; i++) {
+  //       for (var frame in frames) {
+  //         encoder.addFrame(frame, duration: 60);
+  //       }
+  //     }
+
+  //     final gifBytes = encoder.finish();
+
+  //     final dir = await getApplicationDocumentsDirectory();
+  //     final path =
+  //         '${dir.path}/photobooth_${DateTime.now().millisecondsSinceEpoch}.gif';
+
+  //     final file = File(path);
+  //     await file.writeAsBytes(gifBytes!);
+
+  //     /// simpan ke galeri
+  //     await Gal.putImage(path, album: 'Boothera GIF');
+
+  //     if (mounted) {
+  //       context.showAlertSuccess(message: 'GIF berhasil dibuat');
+  //     }
+
+  //     setState(() {
+  //       _loading = false;
+  //     });
+
+  //     return path;
+  //   } catch (e) {
+  //     setState(() {
+  //       _loading = false;
+  //     });
+  //     if (mounted) {
+  //       context.showAlertError(message: 'Gagal membuat GIF: $e');
+  //     }
+
+  //     debugPrint('Gagal membuat GIF: $e');
+  //     return null;
+  //   }
+  // }
+
+  Future<String?> _createVideoFromPhotos() async {
+    try {
+      if (_uploadedPhotos.isEmpty) {
+        debugPrint('Tidak ada foto untuk membuat video');
+        return null;
+      }
+
+      setState(() {
+        _loading = true;
+      });
+
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      final outputPath = '${directory.path}/photobooth_video_$timestamp.mp4';
+
+      const int width = 1080;
+      const int height = 1920;
+      const int fps = 30;
+
+      const double slideDuration = 0.5; // detik
+      final int framesPerSlide = (fps * slideDuration).toInt();
+
+      final sortedKeys = _uploadedPhotos.keys.toList()..sort();
+
+      /// setup encoder
+      await FlutterQuickVideoEncoder.setup(
+        width: width,
+        height: height,
+        fps: fps,
+        videoBitrate: 2500000,
+        audioChannels: 0,
+        audioBitrate: 64000,
+        sampleRate: 44100,
+        filepath: outputPath,
+        profileLevel: ProfileLevel.mainAutoLevel,
+      );
+
+      /// LOOP VIDEO 5x
+      for (int loop = 0; loop < 5; loop++) {
+        for (int key in sortedKeys) {
+          final photoFile = _uploadedPhotos[key]!;
+
+          /// baca file image
+          final bytes = await photoFile.readAsBytes();
+
+          img.Image? image = img.decodeImage(bytes);
+
+          if (image == null) continue;
+
+          /// resize ke 1080x1920
+          image = img.copyResize(image, width: width, height: height);
+
+          /// convert ke RGBA
+          Uint8List rgba = image.getBytes(order: img.ChannelOrder.rgba);
+
+          /// tampilkan foto selama 0.5 detik
+          for (int i = 0; i < framesPerSlide; i++) {
+            await FlutterQuickVideoEncoder.appendVideoFrame(rgba);
+          }
+        }
+      }
+
+      /// selesai encode
+      await FlutterQuickVideoEncoder.finish();
+
+      if (mounted) {
+        context.showAlertSuccess(message: 'Video berhasil dibuat');
+      }
+
+      await Gal.putVideo(outputPath, album: 'Boothera Video');
+
+      debugPrint("Video berhasil dibuat: $outputPath");
+
+      setState(() {
+        _loading = false;
+      });
+
+      if (mounted) {
+        context.showAlertSuccess(message: 'Video berhasil disimpan ke galeri');
+      }
+
+      return outputPath;
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      debugPrint('Error in _createVideoFromPhotos: $e');
+
+      if (mounted) {
+        context.showAlertError(message: 'Gagal membuat video dari foto');
+      }
+
+      return null;
+    }
+  }
+
+  // Future<String?> _createVideoFromPhotos() async {
+  //   try {
+  //     if (_uploadedPhotos.isEmpty) {
+  //       debugPrint('Tidak ada foto untuk membuat video');
+  //       return null;
+  //     }
+
+  //     final directory = await getApplicationDocumentsDirectory();
+  //     final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+  //     final tempVideo = '${directory.path}/temp_video_$timestamp.mp4';
+  //     final finalVideo = '${directory.path}/photobooth_video_$timestamp.mp4';
+
+  //     final listFilePath = '${directory.path}/photo_list_$timestamp.txt';
+  //     final listFile = File(listFilePath);
+
+  //     final sortedKeys = _uploadedPhotos.keys.toList()..sort();
+
+  //     String fileListContent = '';
+
+  //     for (int key in sortedKeys) {
+  //       final photoFile = _uploadedPhotos[key]!;
+  //       final safePath = photoFile.path.replaceAll("'", "\\'");
+
+  //       fileListContent += "file '$safePath'\n";
+  //       fileListContent += "duration 1\n";
+  //     }
+
+  //     if (sortedKeys.isNotEmpty) {
+  //       final lastPhoto = _uploadedPhotos[sortedKeys.last]!;
+  //       final safePath = lastPhoto.path.replaceAll("'", "\\'");
+  //       fileListContent += "file '$safePath'\n";
+  //     }
+
+  //     await listFile.writeAsString(fileListContent);
+
+  //     /// STEP 1: buat slideshow
+  //     final command1 =
+  //         '-f concat -safe 0 -i "$listFilePath" '
+  //         '-c:v libx264 '
+  //         '-r 30 '
+  //         '-pix_fmt yuv420p '
+  //         '-vf "scale=1080:1920:force_original_aspect_ratio=decrease,'
+  //         'pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p" '
+  //         '-y "$tempVideo"';
+
+  //     final session1 = await FFmpegKit.execute(command1);
+
+  //     final returnCode1 = await session1.getReturnCode();
+
+  //     if (!ReturnCode.isSuccess(returnCode1)) {
+  //       debugPrint("Gagal membuat slideshow");
+  //       if (mounted) {
+  //         context.showAlertError(message: 'Gagal membuat video dari foto');
+  //       }
+  //       return null;
+  //     }
+
+  //     /// STEP 2: buat file list untuk repeat video
+  //     final repeatListPath = '${directory.path}/repeat_list_$timestamp.txt';
+  //     final repeatListFile = File(repeatListPath);
+
+  //     String repeatContent = '';
+
+  //     for (int i = 0; i < 3; i++) {
+  //       repeatContent += "file '$tempVideo'\n";
+  //     }
+
+  //     await repeatListFile.writeAsString(repeatContent);
+
+  //     /// STEP 3: concat video 3 kali
+  //     final command2 =
+  //         '-f concat -safe 0 -i "$repeatListPath" '
+  //         '-c copy '
+  //         '-y "$finalVideo"';
+
+  //     final session2 = await FFmpegKit.execute(command2);
+
+  //     final returnCode2 = await session2.getReturnCode();
+
+  //     if (ReturnCode.isSuccess(returnCode2)) {
+  //       if (mounted) {
+  //         context.showAlertSuccess(message: 'Video berhasil dibuat');
+  //       }
+  //       debugPrint("Video berhasil dibuat: $finalVideo");
+
+  //       await Gal.putVideo(finalVideo, album: 'Boothera Video');
+
+  //       await listFile.delete();
+  //       await repeatListFile.delete();
+  //       await File(tempVideo).delete();
+
+  //       return finalVideo;
+  //     } else {
+  //       debugPrint("Gagal repeat video");
+  //       return null;
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error in _createVideoFromPhotos: $e');
+  //     return null;
+  //   }
+  // }
 
   Future<void> _retakeSinglePhoto(int photoIndex) async {
     if (_cameraController == null || !_isCameraInitialized) {
@@ -1725,10 +2060,10 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                   Navigator.pop(context);
                   _retakeSinglePhoto(0);
                 },
-                child: Text('Ambil Ulang'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(0xFF00B894),
                 ),
+                child: Text('Ambil Ulang'),
               ),
             ],
           );
@@ -1741,14 +2076,28 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Pilih Foto untuk Diulang'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: ColorsApp.white,
+          title: Text(
+            'Pilih Foto untuk Diulang',
+            style: TextStyle(
+              color: ColorsApp.primary,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Pilih foto mana yang ingin diambil ulang, atau ulang semua.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: ColorsApp.textSecondary,
+                  ),
                 ),
                 SizedBox(height: 12),
                 ...List.generate(totalPhotos, (index) {
@@ -1757,7 +2106,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                     contentPadding: EdgeInsets.symmetric(horizontal: 4),
                     leading: CircleAvatar(
                       backgroundColor: hasPhoto
-                          ? Color(0xFF00B8D4)
+                          ? ColorsApp.primary
                           : Colors.grey[300],
                       child: Text(
                         '${index + 1}',
@@ -1772,7 +2121,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                       hasPhoto ? 'Sudah diambil' : 'Belum diambil',
                       style: TextStyle(fontSize: 12),
                     ),
-                    trailing: Icon(Icons.refresh, color: Color(0xFF00B894)),
+                    trailing: Icon(Icons.refresh, color: ColorsApp.primary),
                     onTap: () {
                       Navigator.pop(context);
                       _retakeSinglePhoto(index);

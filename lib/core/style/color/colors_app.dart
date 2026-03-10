@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class ColorsApp {
   // Warna Hijau Utama (Pertanian)
-  static const Color primary = Color(0xFF2E7D32); // Hijau tua alami
+  static const Color primary = Color(0xFF6b8f63); // Hijau tua alami
   static const Color lightGreen = Color(0xFF66BB6A); // Hijau muda
   static const Color darkGreen = Color(0xFF1B5E20); // Hijau sangat gelap
   static const Color accentGreen = Color(0xFF81C784); // Hijau aksen

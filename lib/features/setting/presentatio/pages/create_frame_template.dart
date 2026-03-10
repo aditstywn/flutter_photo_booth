@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_photo_booth/core/component/custom_textformfield.dart';
 import 'package:flutter_photo_booth/core/component/space.dart';
 import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
+import 'package:flutter_photo_booth/core/style/color/colors_app.dart';
 import 'package:flutter_photo_booth/core/style/thypograpy/photo_booth_text_style.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -88,44 +90,48 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
           ),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          Text(
-            'Nama Template',
-            style: PhotoBoothTextStyle.titleMedium.copyWith(
-              fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.all(16),
+          children: [
+            Text(
+              'Nama Template',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: ColorsApp.primary,
+              ),
             ),
-          ),
-          SpaceHeight(4),
-          TextField(
-            controller: _templateNameController,
-            decoration: InputDecoration(
-              labelText: 'Template Name',
-              border: OutlineInputBorder(),
+            SpaceHeight(4),
+            CustomTextFormField(
+              controller: _templateNameController,
+              hintText: 'Masukkan nama template',
+              focusedBorderColor: ColorsApp.primary,
             ),
-          ),
-          SpaceHeight(12),
-          // Number of Photo Strips
-          Text(
-            'Nomor Strip Foto',
-            style: PhotoBoothTextStyle.titleMedium.copyWith(
-              fontWeight: FontWeight.bold,
+            SpaceHeight(12),
+            // Number of Photo Strips
+            Text(
+              'Nomor Strip Foto',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: ColorsApp.primary,
+              ),
             ),
-          ),
-          SpaceHeight(4),
-          Text(
-            'Strip: $_numberOfPhotoStrips',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-          SpaceHeight(12),
-          _buildNumberSelector(),
-          SpaceHeight(12),
-          if (_templateFrame == null)
-            _buildPickImageButton()
-          else
-            _buildTemplatePreview(),
-        ],
+            SpaceHeight(4),
+            Text(
+              'Strip: $_numberOfPhotoStrips',
+              style: TextStyle(color: ColorsApp.textSecondary, fontSize: 12),
+            ),
+            SpaceHeight(12),
+            _buildNumberSelector(),
+            SpaceHeight(12),
+            if (_templateFrame == null)
+              _buildPickImageButton()
+            else
+              _buildTemplatePreview(),
+          ],
+        ),
       ),
     );
   }
@@ -153,13 +159,13 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
               height: 50,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Color(0xFF00B8D4)
-                    : Color.fromARGB(255, 126, 126, 138),
-                borderRadius: BorderRadius.circular(12),
+                    ? ColorsApp.primary
+                    : ColorsApp.primary.withAlpha(77),
+                borderRadius: BorderRadius.circular(25),
                 border: Border.all(
                   color: isSelected
-                      ? Color(0xFF00B8D4)
-                      : Colors.grey.withAlpha(77),
+                      ? ColorsApp.primary
+                      : ColorsApp.primary.withAlpha(77),
                   width: 2,
                 ),
               ),
@@ -217,7 +223,7 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
             Container(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: Color(0xFF00B8D4),
+                color: ColorsApp.primary,
                 borderRadius: BorderRadius.circular(25),
               ),
               child: Row(
@@ -254,7 +260,7 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
                 icon: Icon(Icons.image, size: 18),
                 label: Text('Change Image'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF2A2A3E),
+                  backgroundColor: ColorsApp.primary,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
@@ -267,7 +273,7 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
             Container(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Color(0xFF2A2A3E),
+                color: ColorsApp.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -286,7 +292,6 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withAlpha(20),
@@ -294,71 +299,69 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
                 offset: Offset(0, 10),
               ),
             ],
+            border: Border.all(color: ColorsApp.grey, width: 3),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: LayoutBuilder(
-              builder: (context, outerConstraints) {
-                return GestureDetector(
-                  onTapDown: (details) {
-                    // Jangan tambahkan area jika sedang resize atau drag
-                    if (!_isResizing && !_isDragging) {
-                      // Cek apakah tap berada di dalam area yang sudah ada
-                      if (!_isTapInsideExistingArea(
-                        details.localPosition,
-                        outerConstraints,
-                      )) {
-                        _addButtonArea(details, outerConstraints);
-                      }
+          child: LayoutBuilder(
+            builder: (context, outerConstraints) {
+              return GestureDetector(
+                onTapDown: (details) {
+                  // Jangan tambahkan area jika sedang resize atau drag
+                  if (!_isResizing && !_isDragging) {
+                    // Cek apakah tap berada di dalam area yang sudah ada
+                    if (!_isTapInsideExistingArea(
+                      details.localPosition,
+                      outerConstraints,
+                    )) {
+                      _addButtonArea(details, outerConstraints);
                     }
-                  },
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Image.file(
-                            _templateFrame!,
-                            width: double.infinity,
-                            fit: BoxFit.contain,
+                  }
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Image.file(
+                          _templateFrame!,
+                          width: double.infinity,
+                          fit: BoxFit.contain,
+                        );
+                      },
+                    ),
+                    // Overlay layer untuk areas
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, stackConstraints) {
+                          // Validasi constraint
+                          if (stackConstraints.maxWidth.isInfinite ||
+                              stackConstraints.maxHeight.isInfinite ||
+                              stackConstraints.maxWidth == 0 ||
+                              stackConstraints.maxHeight == 0) {
+                            return SizedBox.shrink();
+                          }
+
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              // Gambar area foto
+                              ..._photoAreas.asMap().entries.map((entry) {
+                                int index = entry.key;
+                                ButtonArea area = entry.value;
+                                return _buildAreaWidget(
+                                  index: index,
+                                  area: area,
+                                  constraints: stackConstraints,
+                                );
+                              }),
+                            ],
                           );
                         },
                       ),
-                      // Overlay layer untuk areas
-                      Positioned.fill(
-                        child: LayoutBuilder(
-                          builder: (context, stackConstraints) {
-                            // Validasi constraint
-                            if (stackConstraints.maxWidth.isInfinite ||
-                                stackConstraints.maxHeight.isInfinite ||
-                                stackConstraints.maxWidth == 0 ||
-                                stackConstraints.maxHeight == 0) {
-                              return SizedBox.shrink();
-                            }
-
-                            return Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                // Gambar area foto
-                                ..._photoAreas.asMap().entries.map((entry) {
-                                  int index = entry.key;
-                                  ButtonArea area = entry.value;
-                                  return _buildAreaWidget(
-                                    index: index,
-                                    area: area,
-                                    constraints: stackConstraints,
-                                  );
-                                }),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -414,7 +417,9 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
 
           // Kembali ke halaman sebelumnya
           Future.delayed(Duration(seconds: 1), () {
-            Navigator.of(context).pop(true);
+            if (mounted) {
+              context.pop(true);
+            }
           });
         },
         onError: (error) {
@@ -422,7 +427,9 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
         },
       );
     } catch (e) {
-      context.showAlertError(message: 'Error: $e');
+      if (mounted) {
+        context.showAlertError(message: 'Error: $e');
+      }
     }
   }
 
@@ -453,22 +460,14 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
           _selectedArea = null;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Template image loaded'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          context.showAlertSuccess(message: 'Image loaded successfully!');
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading image: $e'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        context.showAlertError(message: 'Failed to pick image: $e');
+      }
     }
   }
 
@@ -507,8 +506,8 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
     final containerWidth = constraints.maxWidth;
     final containerHeight = constraints.maxHeight;
 
-    const defaultWidthPercent = 0.25; // 25% lebar
-    const defaultHeightPercent = 0.35; // 35% tinggi
+    const defaultWidthPercent = 0.50; // 25% lebar
+    const defaultHeightPercent = 0.25; // 25% tinggi
 
     setState(() {
       _photoAreas.add(
@@ -525,15 +524,6 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
         ),
       );
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Area foto ${_photoAreas.length} ditambahkan'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 1),
-        backgroundColor: Color(0xFF00B8D4),
-      ),
-    );
   }
 
   // Fungsi untuk mendapatkan warna berbeda untuk setiap area foto
@@ -777,14 +767,5 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
       }
       _photoAreas.removeAt(index);
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Area foto dihapus'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 1),
-        backgroundColor: Colors.red,
-      ),
-    );
   }
 }

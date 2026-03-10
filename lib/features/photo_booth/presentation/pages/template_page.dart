@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../core/extensions/build_context_ext.dart';
+import '../../../../core/style/color/colors_app.dart';
 import '../../../setting/data/datasource/frame_template_local_datasource.dart';
 import '../../../setting/data/models/request/frame_template.dart';
 import 'camera_page.dart';
@@ -102,7 +103,7 @@ class _TemplatePageState extends State<TemplatePage> {
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Color(0xFF00B8D4),
+              color: ColorsApp.primary,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -129,7 +130,7 @@ class _TemplatePageState extends State<TemplatePage> {
                   },
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: Color(0xFF00B8D4),
+                    foregroundColor: ColorsApp.primary,
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   child: Text('Lanjut Ambil Foto'),
@@ -215,7 +216,7 @@ class _TemplatePageState extends State<TemplatePage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? Color(0xFF00B8D4) : Colors.grey[300]!,
+            color: isSelected ? ColorsApp.primary : Colors.grey[300]!,
             width: isSelected ? 3 : 1,
           ),
           boxShadow: [
@@ -279,7 +280,7 @@ class _TemplatePageState extends State<TemplatePage> {
                       margin: EdgeInsets.only(top: 8),
                       padding: EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: Color(0xFF00B8D4),
+                        color: ColorsApp.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Center(

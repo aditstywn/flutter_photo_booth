@@ -286,8 +286,13 @@ class _SettingPrinterPageState extends State<SettingPrinterPage> {
           final device = _devices[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
+            color: ColorsApp.white,
             child: ListTile(
-              leading: const Icon(Icons.print, size: 40, color: Colors.blue),
+              leading: const Icon(
+                Icons.print,
+                size: 40,
+                color: ColorsApp.primary,
+              ),
               title: Text(
                 device.name,
                 style: const TextStyle(
@@ -358,8 +363,19 @@ class _SettingPrinterPageState extends State<SettingPrinterPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Hubungkan Printer'),
-        content: Text('Hubungkan ke ${device.name}?'),
+        backgroundColor: ColorsApp.white,
+        title: const Text(
+          'Hubungkan Printer',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ColorsApp.primary,
+          ),
+        ),
+        content: Text(
+          'Hubungkan ke ${device.name}?',
+          style: TextStyle(color: ColorsApp.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),

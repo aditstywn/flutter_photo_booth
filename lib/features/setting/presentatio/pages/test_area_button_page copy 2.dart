@@ -88,8 +88,10 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
     try {
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
+        // Gunakan kamera depan (index 1) jika ada, jika tidak gunakan kamera belakang (index 0)
+        final cameraIndex = _cameras.length > 1 ? 1 : 0;
         _cameraController = CameraController(
-          _cameras[1], // Gunakan kamera depan (selfie)
+          _cameras[cameraIndex],
           ResolutionPreset.high,
           enableAudio: false,
         );
