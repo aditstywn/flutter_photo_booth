@@ -4,8 +4,10 @@ import '../../../../core/component/space.dart';
 import '../../../../core/extensions/build_context_ext.dart';
 import '../../../token/presentation/pages/generate_token_page.dart';
 import '../widgets/setting_menu_card.dart';
+import 'countdown_setting_page.dart';
 import 'custom_button_tema_page.dart';
 import 'custom_tema_page.dart';
+import 'description_wa_page.dart';
 import 'frame_template_list_page.dart';
 import 'generate_voucher_page.dart';
 import 'setting_printer_page.dart';
@@ -65,6 +67,26 @@ class _SettingPageState extends State<SettingPage> {
               color: Color(0xFF00B894),
               onTap: () {
                 context.push(const TestAreaButtonPage());
+              },
+            ),
+            SpaceHeight(16),
+            SettingMenuCard(
+              icon: Icons.timer_outlined,
+              title: 'Atur Countdown',
+              subtitle: 'Atur durasi countdown sebelum foto diambil',
+              color: Color(0xFFFF6B6B),
+              onTap: () {
+                context.push(const CountdownSettingPage());
+              },
+            ),
+            SpaceHeight(16),
+            SettingMenuCard(
+              icon: Icons.description_rounded,
+              title: 'Description WA',
+              subtitle: 'Atur description yang akan dikirim ke WA',
+              color: Color(0xFF0984E3),
+              onTap: () {
+                context.push(const DescriptionWaPage());
               },
             ),
             SpaceHeight(16),

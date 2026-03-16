@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/extensions/build_context_ext.dart';
+import '../../../setting/data/datasource/countdown_settings_datasource.dart';
 import 'result_page.dart';
 
 import '../../../setting/data/datasource/custom_button_local_datasource.dart';
@@ -49,6 +50,7 @@ class _CameraPageState extends State<CameraPage> {
   Map<int, File> _uploadedPhotos = {}; // indeks -> file foto
   int _countdownValue = 0; // 0 = tidak countdown
   int _countdownPhotoIndex = 0; // foto ke-berapa yang sedang di-countdown
+  int _countdownDuration = 3; // durasi countdown (default 3 detik)
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _CameraPageState extends State<CameraPage> {
 
     _loadSavedFrames();
     _loadSavedButtonAreas();
+    _loadCountdownSettings();
     _initializeCamera();
   }
 
@@ -96,39 +99,114 @@ class _CameraPageState extends State<CameraPage> {
     );
   }
 
+  Future<void> _loadCountdownSettings() async {
+    try {
+      final duration = await CountdownSettingsDatasource()
+          .loadCountdownDuration();
+      if (mounted) {
+        setState(() {
+          _countdownDuration = duration;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error memuat countdown settings: $e');
+    }
+  }
+
+  // Future<void> _initializeCamera() async {
+  //   try {
+  //     _cameras = await availableCameras();
+  //     if (_cameras.isNotEmpty) {
+  //       _selectedCameraIndex = _cameras.length > 1 ? 1 : 0;
+  //       _cameraController = CameraController(
+  //         _cameras[_selectedCameraIndex],
+  //         ResolutionPreset.high,
+  //         enableAudio: false,
+  //       );
+  //       await _cameraController!.initialize();
+
+  //       // Ambil level zoom kamera
+  //       _minZoomLevel = await _cameraController!.getMinZoomLevel();
+  //       _maxZoomLevel = await _cameraController!.getMaxZoomLevel();
+
+  //       // Pastikan max zoom selalu lebih besar dari min (fallback untuk kamera tanpa zoom)
+  //       if (_maxZoomLevel <= _minZoomLevel) {
+  //         _maxZoomLevel =
+  //             _minZoomLevel + 9.0; // Set max ke 10x jika tidak support zoom
+  //       }
+
+  //       _currentZoomLevel = _minZoomLevel;
+
+  //       if (mounted) {
+  //         setState(() {
+  //           _isCameraInitialized = true;
+  //         });
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error inisialisasi kamera: $e');
+  //   }
+  // }
+
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
-      if (_cameras.isNotEmpty) {
-        _selectedCameraIndex = _cameras.length > 1 ? 1 : 0;
-        _cameraController = CameraController(
-          _cameras[_selectedCameraIndex],
-          ResolutionPreset.high,
-          enableAudio: false,
+      if (_cameras.isEmpty) return;
+
+      // pilih kamera depan terbaik
+      final bestCamera = _getBestFrontCamera(_cameras);
+      _selectedCameraIndex = _cameras.indexOf(bestCamera);
+
+      _cameraController = CameraController(
+        bestCamera,
+        ResolutionPreset.max, // supaya foto photobooth tajam
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+
+      _minZoomLevel = await _cameraController!.getMinZoomLevel();
+      _maxZoomLevel = await _cameraController!.getMaxZoomLevel();
+
+      // gunakan zoom minimum supaya FOV paling luas
+      await _cameraController!.setZoomLevel(_minZoomLevel);
+
+      _currentZoomLevel = _minZoomLevel;
+
+      if (mounted) {
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      }
+
+      // debug kamera
+      for (int i = 0; i < _cameras.length; i++) {
+        debugPrint(
+          "Camera $i : ${_cameras[i].lensDirection} - ${_cameras[i].name}",
         );
-        await _cameraController!.initialize();
-
-        // Ambil level zoom kamera
-        _minZoomLevel = await _cameraController!.getMinZoomLevel();
-        _maxZoomLevel = await _cameraController!.getMaxZoomLevel();
-
-        // Pastikan max zoom selalu lebih besar dari min (fallback untuk kamera tanpa zoom)
-        if (_maxZoomLevel <= _minZoomLevel) {
-          _maxZoomLevel =
-              _minZoomLevel + 9.0; // Set max ke 10x jika tidak support zoom
-        }
-
-        _currentZoomLevel = _minZoomLevel;
-
-        if (mounted) {
-          setState(() {
-            _isCameraInitialized = true;
-          });
-        }
       }
     } catch (e) {
       debugPrint('Error inisialisasi kamera: $e');
     }
+  }
+
+  CameraDescription _getBestFrontCamera(List<CameraDescription> cameras) {
+    // ambil semua kamera depan
+    final frontCameras = cameras
+        .where((c) => c.lensDirection == CameraLensDirection.front)
+        .toList();
+
+    if (frontCameras.isEmpty) {
+      return cameras.first;
+    }
+
+    // jika ada lebih dari satu kamera depan
+    if (frontCameras.length > 1) {
+      // biasanya ultra wide index lebih besar
+      return frontCameras.last;
+    }
+
+    return frontCameras.first;
   }
 
   Future<void> _switchCamera() async {
@@ -431,7 +509,7 @@ class _CameraPageState extends State<CameraPage> {
           Positioned.fill(
             child: ClipRRect(
               child: FittedBox(
-                fit: BoxFit.fill,
+                fit: BoxFit.cover,
                 child: SizedBox(
                   width: cameraController.value.previewSize!.height,
                   height: cameraController.value.previewSize!.width,
@@ -496,14 +574,16 @@ class _CameraPageState extends State<CameraPage> {
     });
 
     for (int i = 0; i < totalPhotos; i++) {
-      // Countdown 3, 2, 1 tampil di atas kamera preview
-      for (int countdown = 3; countdown > 0; countdown--) {
-        if (!mounted) return;
-        setState(() {
-          _countdownValue = countdown;
-          _countdownPhotoIndex = i + 1;
-        });
-        await Future.delayed(Duration(seconds: 1));
+      // Countdown tampil di atas kamera preview (skip jika 0)
+      if (_countdownDuration > 0) {
+        for (int countdown = _countdownDuration; countdown > 0; countdown--) {
+          if (!mounted) return;
+          setState(() {
+            _countdownValue = countdown;
+            _countdownPhotoIndex = i + 1;
+          });
+          await Future.delayed(Duration(seconds: 1));
+        }
       }
 
       if (!mounted) return;
@@ -555,14 +635,16 @@ class _CameraPageState extends State<CameraPage> {
   }
 
   Future<void> _retakeSinglePhoto(int photoIndex) async {
-    // Hitung mundur 3, 2, 1
-    for (int countdown = 3; countdown > 0; countdown--) {
-      if (!mounted) return;
-      setState(() {
-        _countdownValue = countdown;
-        _countdownPhotoIndex = photoIndex + 1;
-      });
-      await Future.delayed(Duration(seconds: 1));
+    // Hitung mundur (skip jika 0)
+    if (_countdownDuration > 0) {
+      for (int countdown = _countdownDuration; countdown > 0; countdown--) {
+        if (!mounted) return;
+        setState(() {
+          _countdownValue = countdown;
+          _countdownPhotoIndex = photoIndex + 1;
+        });
+        await Future.delayed(Duration(seconds: 1));
+      }
     }
 
     if (!mounted) return;

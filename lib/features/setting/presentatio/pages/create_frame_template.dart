@@ -5,7 +5,6 @@ import 'package:flutter_photo_booth/core/component/custom_textformfield.dart';
 import 'package:flutter_photo_booth/core/component/space.dart';
 import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
 import 'package:flutter_photo_booth/core/style/color/colors_app.dart';
-import 'package:flutter_photo_booth/core/style/thypograpy/photo_booth_text_style.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -291,7 +290,7 @@ class _CreateFrameTemplateState extends State<CreateFrameTemplate> {
         SpaceHeight(16),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ColorsApp.grey,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withAlpha(20),

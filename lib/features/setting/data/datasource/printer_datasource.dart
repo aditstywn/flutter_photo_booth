@@ -56,14 +56,14 @@ class PrinterDatasource {
       List<int> bytes = [];
       final profile = await CapabilityProfile.load();
       final generator = Generator(
-        PaperSize.mm58,
+        PaperSize.mm80,
         profile,
       ); // mm80 -> 576 atau mm58 -> 384
 
       final img.Image? image = img.decodeImage(imageBytes);
       if (image != null) {
         // Resize terlebih dahulu
-        final img.Image resized = img.copyResize(image, width: 384);
+        final img.Image resized = img.copyResize(image, width: 576);
 
         // Load settings dan preprocessing untuk kualitas cetak yang lebih baik
         final settings = await _settingsDatasource.loadSettings();

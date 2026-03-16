@@ -5,6 +5,7 @@ import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
 
 import '../../../../core/component/space.dart';
 import '../../../../core/component/tab_selector.dart';
+import '../../../../core/style/color/colors_app.dart';
 import '../../data/datasource/custom_button_local_datasource.dart';
 import '../../data/datasource/custom_frame_local_datasource.dart';
 import '../../data/models/request/button_area.dart';
@@ -249,7 +250,7 @@ class _CustomButtonTemaPageState extends State<CustomButtonTemaPage> {
         : _resultFrame;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ColorsApp.grey,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey[300]!, width: 2),
         boxShadow: [

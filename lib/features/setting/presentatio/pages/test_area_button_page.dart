@@ -8,6 +8,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_photo_booth/core/extensions/build_context_ext.dart';
+import 'package:flutter_photo_booth/features/setting/data/datasource/description_wa_local_datasource.dart';
 import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:gal/gal.dart';
 import 'package:image/image.dart' as img;
@@ -16,9 +17,11 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/component/buttons.dart';
 import '../../../../core/component/space.dart';
 import '../../../../core/component/tab_selector.dart';
 import '../../../../core/style/color/colors_app.dart';
+import '../../data/datasource/countdown_settings_datasource.dart';
 import '../../data/datasource/custom_button_local_datasource.dart';
 import '../../data/datasource/custom_frame_local_datasource.dart';
 import '../../data/datasource/frame_template_local_datasource.dart';
@@ -59,10 +62,14 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
   CameraController? _cameraController;
   bool _isCameraInitialized = false;
 
+  // Variabel zoom
+  double _minZoomLevel = 1.0;
+
   // Photo capture variables
   final Map<int, File> _uploadedPhotos = {}; // indeks -> file foto
   int _countdownValue = 0; // 0 = tidak countdown
   int _countdownPhotoIndex = 0; // foto ke-berapa yang sedang di-countdown
+  int _countdownDuration = 3; // durasi countdown (default 3 detik)
 
   // Template image size (untuk BoxFit.contain offset correction)
   Size? _templateImageSize;
@@ -73,41 +80,121 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
 
   bool _loading = false;
 
+  int _currentTemplateIndex = 0;
+  late PageController _pageController;
+
+  String? _description = '';
+
   @override
   void initState() {
+    _pageController = PageController();
+    _loadCountdownSettings();
     _loadSavedFrames();
     _loadSavedButtonAreas();
     _loadTemplates();
     _initializeCamera();
+    _loadDescription();
     super.initState();
   }
 
   @override
   void dispose() {
     _cameraController?.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
-      if (_cameras.isNotEmpty) {
-        // Gunakan kamera depan (index 1) jika ada, jika tidak gunakan kamera belakang (index 0)
-        final cameraIndex = _cameras.length > 1 ? 1 : 0;
-        _cameraController = CameraController(
-          _cameras[cameraIndex],
-          ResolutionPreset.high,
-          enableAudio: false,
+      if (_cameras.isEmpty) return;
+
+      // pilih kamera depan terbaik
+      final bestCamera = _getBestFrontCamera(_cameras);
+
+      _cameraController = CameraController(
+        bestCamera,
+        ResolutionPreset.max, // supaya foto photobooth tajam
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+
+      _minZoomLevel = await _cameraController!.getMinZoomLevel();
+
+      // gunakan zoom minimum supaya FOV paling luas
+      await _cameraController!.setZoomLevel(_minZoomLevel);
+
+      if (mounted) {
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      }
+
+      // debug kamera
+      for (int i = 0; i < _cameras.length; i++) {
+        debugPrint(
+          "Camera $i : ${_cameras[i].lensDirection} - ${_cameras[i].name}",
         );
-        await _cameraController!.initialize();
-        if (mounted) {
-          setState(() {
-            _isCameraInitialized = true;
-          });
-        }
       }
     } catch (e) {
-      debugPrint('Error initializing camera: $e');
+      debugPrint('Error inisialisasi kamera: $e');
+    }
+  }
+
+  CameraDescription _getBestFrontCamera(List<CameraDescription> cameras) {
+    // ambil semua kamera depan
+    final frontCameras = cameras
+        .where((c) => c.lensDirection == CameraLensDirection.front)
+        .toList();
+
+    if (frontCameras.isEmpty) {
+      return cameras.first;
+    }
+
+    // jika ada lebih dari satu kamera depan
+    if (frontCameras.length > 1) {
+      // biasanya ultra wide index lebih besar
+      return frontCameras.last;
+    }
+
+    return frontCameras.first;
+  }
+
+  // Future<void> _initializeCamera() async {
+  //   try {
+  //     _cameras = await availableCameras();
+  //     if (_cameras.isNotEmpty) {
+  //       // Gunakan kamera depan (index 1) jika ada, jika tidak gunakan kamera belakang (index 0)
+  //       final cameraIndex = _cameras.length > 1 ? 1 : 0;
+  //       _cameraController = CameraController(
+  //         _cameras[cameraIndex],
+  //         ResolutionPreset.high,
+  //         enableAudio: false,
+  //       );
+  //       await _cameraController!.initialize();
+  //       if (mounted) {
+  //         setState(() {
+  //           _isCameraInitialized = true;
+  //         });
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error initializing camera: $e');
+  //   }
+  // }
+
+  Future<void> _loadCountdownSettings() async {
+    try {
+      final duration = await CountdownSettingsDatasource()
+          .loadCountdownDuration();
+      if (mounted) {
+        setState(() {
+          _countdownDuration = duration;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error memuat countdown settings: $e');
     }
   }
 
@@ -157,6 +244,42 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
     );
   }
 
+  void _goToNextTemplate() {
+    if (_currentTemplateIndex < _availableTemplates.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _goToPreviousTemplate() {
+    if (_currentTemplateIndex > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  Future<void> _selectTemplate() async {
+    final currentTemplate = _availableTemplates[_currentTemplateIndex];
+    setState(() {
+      _selectedTemplate = currentTemplate;
+      _templateImageSize = null;
+    });
+
+    // Wait for template image size to load before navigating
+    await _loadTemplateImageSize(currentTemplate.framePath);
+
+    // Navigate to camera page
+    if (mounted) {
+      setState(() {
+        _selectedFrame = 'camera';
+      });
+    }
+  }
+
   Future<void> _loadTemplates() async {
     final templates = await FrameTemplateLocalDatasource().loadAllTemplates();
     setState(() {
@@ -200,6 +323,22 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       }
     } catch (e) {
       debugPrint('Error loading template image size: $e');
+    }
+  }
+
+  Future<void> _loadDescription() async {
+    try {
+      final description = await DescriptionWaLocalDatasource()
+          .loadDescription();
+      if (mounted) {
+        setState(() {
+          _description = description;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showAlertError(message: 'Error loading settings: $e');
+      }
     }
   }
 
@@ -248,7 +387,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
   Widget _buildEditSection() {
     // Tampilkan list template jika tab template dipilih
     if (_selectedFrame == 'template') {
-      return _buildTemplateList();
+      return listTemplate(context);
     }
 
     File? currentFrame;
@@ -347,13 +486,13 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: ColorsApp.primary,
                                   ),
                                   SizedBox(height: 12),
                                   Text(
-                                    'Mencetak...',
+                                    'Loading...',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: ColorsApp.white,
                                       fontSize: 16,
                                     ),
                                   ),
@@ -380,211 +519,167 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
   }
 
   // Widget untuk menampilkan list template
-  Widget _buildTemplateList() {
-    if (_availableTemplates.isEmpty) {
-      return Container(
-        padding: EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(20),
-              blurRadius: 20,
-              offset: Offset(0, 10),
+  Column listTemplate(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Template Display Area
+        SizedBox(
+          height: 500, // Fixed height untuk PageView
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: _availableTemplates.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentTemplateIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              final template = _availableTemplates[index];
+              return Container(
+                margin: EdgeInsets.only(bottom: 16),
+                child: _buildSingleTemplateView(template),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 16),
+
+        // Navigation Buttons (Previous & Next)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Previous Button
+            ElevatedButton.icon(
+              onPressed: _currentTemplateIndex > 0
+                  ? _goToPreviousTemplate
+                  : null,
+              icon: Icon(Icons.arrow_back),
+              label: Text('Sebelumnya'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _currentTemplateIndex > 0
+                    ? Colors.grey[300]
+                    : Colors.grey[200],
+                foregroundColor: Colors.black87,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            SizedBox(width: 16),
+
+            // Next Button
+            ElevatedButton.icon(
+              onPressed: _currentTemplateIndex < _availableTemplates.length - 1
+                  ? _goToNextTemplate
+                  : null,
+              icon: Icon(Icons.arrow_forward),
+              label: Text('Selanjutnya'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    _currentTemplateIndex < _availableTemplates.length - 1
+                    ? Colors.grey[300]
+                    : Colors.grey[200],
+                foregroundColor: Colors.black87,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ],
         ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.photo_album_outlined,
-                size: 80,
-                color: Colors.grey[300],
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Belum Ada Template',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600],
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Buat template terlebih dahulu',
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_selectedTemplate != null)
-          Container(
-            padding: EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: ColorsApp.primary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Template dipilih: ${_selectedTemplate!.name}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedFrame = 'camera';
-                    });
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: ColorsApp.primary,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                  child: Text('Lanjut Ambil Foto'),
-                ),
-              ],
-            ),
-          ),
-        SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.75,
-          ),
-          itemCount: _availableTemplates.length,
-          itemBuilder: (context, index) {
-            final template = _availableTemplates[index];
-            final isSelected = _selectedTemplate?.id == template.id;
-            return _buildTemplateCard(template, isSelected);
-          },
+        SizedBox(height: 16),
+
+        // Select Button
+        Button.filled(
+          height: 50,
+          onPressed: _selectTemplate,
+          label: 'Pilih Template Ini',
+          color: ColorsApp.primary,
         ),
+
+        SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildTemplateCard(FrameTemplate template, bool isSelected) {
+  Widget _buildSingleTemplateView(FrameTemplate template) {
     final frameFile = File(template.framePath);
     final frameExists = frameFile.existsSync();
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedTemplate = template;
-          _templateImageSize = null; // reset lalu muat ulang
-        });
-        _loadTemplateImageSize(template.framePath);
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? ColorsApp.primary : Colors.grey[300]!,
-            width: isSelected ? 3 : 1,
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(20),
+            blurRadius: 20,
+            offset: Offset(0, 10),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Preview Frame
-            Expanded(
-              child: Container(
-                margin: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: frameExists
-                      ? Image.file(frameFile, fit: BoxFit.cover)
-                      : Center(
-                          child: Icon(
-                            Icons.broken_image,
-                            color: Colors.grey[400],
-                            size: 40,
-                          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Preview Frame
+          SizedBox(
+            height: 380, // Fixed height untuk preview
+            child: Container(
+              margin: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: frameExists
+                    ? Image.file(frameFile, fit: BoxFit.contain)
+                    : Center(
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Colors.grey[400],
+                          size: 80,
                         ),
-                ),
+                      ),
               ),
             ),
-            // Info
-            Padding(
-              padding: EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    template.name,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.photo_library, size: 12, color: Colors.grey),
-                      SizedBox(width: 4),
-                      Text(
-                        '${template.numberOfPhotoStrips} Photos',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                  if (isSelected)
-                    Container(
-                      margin: EdgeInsets.only(top: 8),
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: ColorsApp.primary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '✓ Terpilih',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+          ),
+          // Info
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  template.name,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.photo_library,
+                      size: 18,
+                      color: Colors.grey[600],
                     ),
-                ],
-              ),
+                    SizedBox(width: 8),
+                    Text(
+                      '${template.numberOfPhotoStrips} Photos',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -750,14 +845,15 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
     });
 
     for (int i = 0; i < totalPhotos; i++) {
-      // Countdown 3, 2, 1 tampil di atas camera preview
-      for (int countdown = 3; countdown > 0; countdown--) {
-        if (!mounted) return;
-        setState(() {
-          _countdownValue = countdown;
-          _countdownPhotoIndex = i + 1;
-        });
-        await Future.delayed(Duration(seconds: 1));
+      if (_countdownDuration > 0) {
+        for (int countdown = _countdownDuration; countdown > 0; countdown--) {
+          if (!mounted) return;
+          setState(() {
+            _countdownValue = countdown;
+            _countdownPhotoIndex = i + 1;
+          });
+          await Future.delayed(Duration(seconds: 1));
+        }
       }
 
       if (!mounted) return;
@@ -867,7 +963,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
           Positioned.fill(
             child: ClipRRect(
               child: FittedBox(
-                fit: BoxFit.fill,
+                fit: BoxFit.cover,
                 child: SizedBox(
                   width: _cameraController!.value.previewSize!.height,
                   height: _cameraController!.value.previewSize!.width,
@@ -1166,7 +1262,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: FileImage(_uploadedPhotos[index]!),
-                fit: BoxFit.fill,
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -1372,10 +1468,30 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       List<String> recentResults = prefs.getStringList('recent_results') ?? [];
       recentResults.insert(0, imagePath);
 
-      // Simpan setiap foto individual yang dipakai ke galeri
+      // Simpan setiap foto individual yang dipakai ke galeri (dengan mirror horizontal)
       for (int i = 0; i < (_selectedTemplate?.numberOfPhotoStrips ?? 1); i++) {
         if (_uploadedPhotos.containsKey(i)) {
-          await Gal.putImage(_uploadedPhotos[i]!.path, album: 'Boothera');
+          // Baca foto asli
+          final originalBytes = await _uploadedPhotos[i]!.readAsBytes();
+          img.Image? originalImage = img.decodeImage(originalBytes);
+
+          if (originalImage != null) {
+            // Flip horizontal agar sesuai dengan tampilan di layar
+            final flippedImage = img.flipHorizontal(originalImage);
+
+            // Simpan ke file temporary
+            final tempDir = await getApplicationDocumentsDirectory();
+            final flippedPath =
+                '${tempDir.path}/flipped_photo_${i}_$timestamp.jpg';
+            final flippedFile = File(flippedPath);
+            await flippedFile.writeAsBytes(img.encodeJpg(flippedImage));
+
+            // Simpan ke galeri
+            await Gal.putImage(flippedFile.path, album: 'Boothera');
+
+            // Hapus file temporary
+            await flippedFile.delete();
+          }
         }
       }
 
@@ -1623,7 +1739,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
                                   // Buka WhatsApp langsung ke chat nomor
                                   // (berfungsi meski nomor tidak ada di kontak)
                                   final waUrl = Uri.parse(
-                                    'whatsapp://send?phone=$rawNumber&text=Foto+dari+Photo+Booth',
+                                    'whatsapp://send?phone=$rawNumber&text=$_description',
                                   );
                                   if (await canLaunchUrl(waUrl)) {
                                     await launchUrl(
@@ -1780,21 +1896,88 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
 
       final outputPath = '${directory.path}/photobooth_video_$timestamp.mp4';
 
-      const int width = 1080;
-      const int height = 1920;
-      const int fps = 30;
-
-      const double slideDuration = 0.5; // detik
-      final int framesPerSlide = (fps * slideDuration).toInt();
-
       final sortedKeys = _uploadedPhotos.keys.toList()..sort();
 
-      /// setup encoder
+      // Ambil ukuran dari foto pertama untuk menentukan orientasi video
+      final firstPhotoBytes = await _uploadedPhotos[sortedKeys.first]!
+          .readAsBytes();
+      final firstImage = img.decodeImage(firstPhotoBytes);
+
+      if (firstImage == null) {
+        debugPrint('Gagal decode foto pertama');
+        setState(() {
+          _loading = false;
+        });
+        return null;
+      }
+
+      // Target resolusi lebih kecil agar encoding lebih cepat,
+      // sambil tetap mempertahankan rasio asli agar tidak gepeng.
+      const int maxLongEdge = 1280;
+      final bool isPortrait = firstImage.height >= firstImage.width;
+      final double sourceAspect = firstImage.width / firstImage.height;
+
+      int width;
+      int height;
+      if (isPortrait) {
+        height = maxLongEdge;
+        width = (height * sourceAspect).round();
+      } else {
+        width = maxLongEdge;
+        height = (width / sourceAspect).round();
+      }
+
+      // Banyak encoder butuh dimensi genap.
+      width = width.isOdd ? width - 1 : width;
+      height = height.isOdd ? height - 1 : height;
+
+      const int fps = 24;
+      const int loopCount = 3;
+      const int videoBitrate = 1400000;
+
+      const double slideDuration = 0.45; // detik
+      final int framesPerSlide = (fps * slideDuration).toInt();
+
+      img.Image fitToCanvas(
+        img.Image source,
+        int canvasWidth,
+        int canvasHeight,
+      ) {
+        final canvasAspect = canvasWidth / canvasHeight;
+        final sourceAspect = source.width / source.height;
+
+        int targetWidth;
+        int targetHeight;
+        if (sourceAspect > canvasAspect) {
+          targetWidth = canvasWidth;
+          targetHeight = (canvasWidth / sourceAspect).round();
+        } else {
+          targetHeight = canvasHeight;
+          targetWidth = (canvasHeight * sourceAspect).round();
+        }
+
+        final resized = img.copyResize(
+          source,
+          width: targetWidth,
+          height: targetHeight,
+          interpolation: img.Interpolation.linear,
+        );
+
+        final canvas = img.Image(width: canvasWidth, height: canvasHeight);
+        img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
+
+        final offsetX = ((canvasWidth - targetWidth) / 2).round();
+        final offsetY = ((canvasHeight - targetHeight) / 2).round();
+        img.compositeImage(canvas, resized, dstX: offsetX, dstY: offsetY);
+        return canvas;
+      }
+
+      /// setup encoder dengan ukuran asli foto
       await FlutterQuickVideoEncoder.setup(
         width: width,
         height: height,
         fps: fps,
-        videoBitrate: 2500000,
+        videoBitrate: videoBitrate,
         audioChannels: 0,
         audioBitrate: 64000,
         sampleRate: 44100,
@@ -1802,8 +1985,8 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
         profileLevel: ProfileLevel.mainAutoLevel,
       );
 
-      /// LOOP VIDEO 5x
-      for (int loop = 0; loop < 5; loop++) {
+      /// LOOP VIDEO beberapa kali agar durasi cukup tanpa file terlalu besar
+      for (int loop = 0; loop < loopCount; loop++) {
         for (int key in sortedKeys) {
           final photoFile = _uploadedPhotos[key]!;
 
@@ -1814,8 +1997,11 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
 
           if (image == null) continue;
 
-          /// resize ke 1080x1920
-          image = img.copyResize(image, width: width, height: height);
+          /// flip horizontal agar sesuai dengan tampilan di layar (mirror)
+          image = img.flipHorizontal(image);
+
+          /// fit ke canvas tanpa mengubah rasio agar tidak gepeng
+          image = fitToCanvas(image, width, height);
 
           /// convert ke RGBA
           Uint8List rgba = image.getBytes(order: img.ChannelOrder.rgba);
@@ -1834,7 +2020,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
         context.showAlertSuccess(message: 'Video berhasil dibuat');
       }
 
-      await Gal.putVideo(outputPath, album: 'Boothera Video');
+      await Gal.putVideo(outputPath, album: 'Boothera');
 
       debugPrint("Video berhasil dibuat: $outputPath");
 
@@ -1966,13 +2152,7 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
 
   Future<void> _retakeSinglePhoto(int photoIndex) async {
     if (_cameraController == null || !_isCameraInitialized) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Kamera belum siap'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      context.showAlertError(message: 'Kamera tidak tersedia');
       return;
     }
 
@@ -1982,14 +2162,16 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       _selectedFrame = 'camera';
     });
 
-    // Countdown 3, 2, 1
-    for (int countdown = 3; countdown > 0; countdown--) {
-      if (!mounted) return;
-      setState(() {
-        _countdownValue = countdown;
-        _countdownPhotoIndex = photoIndex + 1;
-      });
-      await Future.delayed(Duration(seconds: 1));
+    // Hitung mundur (skip jika 0)
+    if (_countdownDuration > 0) {
+      for (int countdown = _countdownDuration; countdown > 0; countdown--) {
+        if (!mounted) return;
+        setState(() {
+          _countdownValue = countdown;
+          _countdownPhotoIndex = photoIndex + 1;
+        });
+        await Future.delayed(Duration(seconds: 1));
+      }
     }
 
     if (!mounted) return;

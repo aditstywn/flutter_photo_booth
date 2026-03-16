@@ -15,6 +15,7 @@ import 'package:image/image.dart' as img;
 import '../../../../core/component/space.dart';
 import '../../../../core/extensions/build_context_ext.dart';
 import '../../../../core/style/color/colors_app.dart';
+import '../../../setting/data/datasource/description_wa_local_datasource.dart';
 import '../../../setting/data/datasource/printer_datasource.dart';
 import '../../../history/data/datasource/print_history_datasource.dart';
 import 'camera_page.dart';
@@ -56,6 +57,8 @@ class _ResultPageState extends State<ResultPage> {
 
   bool _loading = false;
 
+  String? _description = '';
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +66,7 @@ class _ResultPageState extends State<ResultPage> {
     _photos = Map<int, File>.from(widget.uploadedPhotos ?? {});
     _loadSavedFrames();
     _loadSavedButtonAreas();
-    print('uploadedPhotos in ResultPage: ${widget.uploadedPhotos}');
+    _loadDescription();
   }
 
   @override
@@ -99,6 +102,22 @@ class _ResultPageState extends State<ResultPage> {
         debugPrint('Error loading button areas: $e');
       },
     );
+  }
+
+  Future<void> _loadDescription() async {
+    try {
+      final description = await DescriptionWaLocalDatasource()
+          .loadDescription();
+      if (mounted) {
+        setState(() {
+          _description = description;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showAlertError(message: 'Error loading settings: $e');
+      }
+    }
   }
 
   @override
@@ -173,7 +192,7 @@ class _ResultPageState extends State<ResultPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     CircularProgressIndicator(
-                                      color: Colors.white,
+                                      color: ColorsApp.primary,
                                     ),
                                     SizedBox(height: 12),
                                     Text(
@@ -471,7 +490,7 @@ class _ResultPageState extends State<ResultPage> {
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: FileImage(_photos[index]!),
-                fit: BoxFit.fill,
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -609,14 +628,34 @@ class _ResultPageState extends State<ResultPage> {
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(pngBytes);
 
-      // Simpan setiap foto individual yang dipakai ke galeri
+      // Simpan setiap foto individual yang dipakai ke galeri (dengan mirror horizontal)
       for (
         int i = 0;
         i < (widget.selectedTemplate?.numberOfPhotoStrips ?? 1);
         i++
       ) {
         if (_photos.containsKey(i)) {
-          await Gal.putImage(_photos[i]!.path, album: 'Boothera');
+          // Baca foto asli
+          final originalBytes = await _photos[i]!.readAsBytes();
+          img.Image? originalImage = img.decodeImage(originalBytes);
+
+          if (originalImage != null) {
+            // Flip horizontal agar sesuai dengan tampilan di layar
+            final flippedImage = img.flipHorizontal(originalImage);
+
+            // Simpan ke file temporary
+            final tempDir = await getApplicationDocumentsDirectory();
+            final flippedPath =
+                '${tempDir.path}/flipped_photo_${i}_$timestamp.jpg';
+            final flippedFile = File(flippedPath);
+            await flippedFile.writeAsBytes(img.encodeJpg(flippedImage));
+
+            // Simpan ke galeri
+            await Gal.putImage(flippedFile.path, album: 'Boothera');
+
+            // Hapus file temporary
+            await flippedFile.delete();
+          }
         }
       }
 
@@ -827,7 +866,6 @@ class _ResultPageState extends State<ResultPage> {
                     actions: [
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(context);
                           Navigator.pop(context, true);
                         },
                         child: Text(
@@ -857,7 +895,7 @@ class _ResultPageState extends State<ResultPage> {
                                   // Buka WhatsApp langsung ke chat nomor
                                   // (berfungsi meski nomor tidak ada di kontak)
                                   final waUrl = Uri.parse(
-                                    'whatsapp://send?phone=$rawNumber&text=Foto+dari+Photo+Booth',
+                                    'whatsapp://send?phone=$rawNumber&text=$_description',
                                   );
                                   if (await canLaunchUrl(waUrl)) {
                                     await launchUrl(
@@ -873,10 +911,14 @@ class _ResultPageState extends State<ResultPage> {
                                           content: Text(
                                             'Ketuk 📎 di WA → pilih foto dari Galeri',
                                           ),
-                                          backgroundColor: Color(0xFF25D366),
+                                          backgroundColor: ColorsApp.primary,
                                           behavior: SnackBarBehavior.floating,
                                           duration: Duration(seconds: 5),
                                         ),
+                                      );
+                                      context.pushAndRemoveUntil(
+                                        MainPage(),
+                                        (route) => route.isFirst,
                                       );
                                     }
                                   } else {
@@ -1035,15 +1077,18 @@ class _ResultPageState extends State<ResultPage> {
                   ),
                   onTap: () {
                     Navigator.pop(context);
+                    context.push(
+                      CameraPage(
+                        selectedTemplate: widget.selectedTemplate,
+                        templateImageSize: widget.templateImageSize,
+                        retakePhotoIndex: null,
+                      ),
+                    );
                     setState(() {
                       _photos.clear();
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Silakan ambil ulang semua foto'),
-                        backgroundColor: Color(0xFF00B894),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    context.showAlertSuccess(
+                      message: 'Silakan ambil ulang semua foto',
                     );
                   },
                 ),
@@ -1106,21 +1151,87 @@ class _ResultPageState extends State<ResultPage> {
 
       final outputPath = '${directory.path}/photobooth_video_$timestamp.mp4';
 
-      const int width = 1080;
-      const int height = 1920;
-      const int fps = 30;
-
-      const double slideDuration = 0.5; // detik
-      final int framesPerSlide = (fps * slideDuration).toInt();
-
       final sortedKeys = _photos.keys.toList()..sort();
 
-      /// setup encoder
+      // Ambil ukuran dari foto pertama untuk menentukan orientasi video
+      final firstPhotoBytes = await _photos[sortedKeys.first]!.readAsBytes();
+      final firstImage = img.decodeImage(firstPhotoBytes);
+
+      if (firstImage == null) {
+        debugPrint('Gagal decode foto pertama');
+        setState(() {
+          _loading = false;
+        });
+        return null;
+      }
+
+      // Target resolusi lebih kecil agar encoding lebih cepat,
+      // sambil tetap mempertahankan rasio asli agar tidak gepeng.
+      const int maxLongEdge = 1280;
+      final bool isPortrait = firstImage.height >= firstImage.width;
+      final double sourceAspect = firstImage.width / firstImage.height;
+
+      int width;
+      int height;
+      if (isPortrait) {
+        height = maxLongEdge;
+        width = (height * sourceAspect).round();
+      } else {
+        width = maxLongEdge;
+        height = (width / sourceAspect).round();
+      }
+
+      // Banyak encoder butuh dimensi genap.
+      width = width.isOdd ? width - 1 : width;
+      height = height.isOdd ? height - 1 : height;
+
+      const int fps = 24;
+      const int loopCount = 3;
+      const int videoBitrate = 1400000;
+
+      const double slideDuration = 0.45; // detik
+      final int framesPerSlide = (fps * slideDuration).toInt();
+
+      img.Image fitToCanvas(
+        img.Image source,
+        int canvasWidth,
+        int canvasHeight,
+      ) {
+        final canvasAspect = canvasWidth / canvasHeight;
+        final sourceAspect = source.width / source.height;
+
+        int targetWidth;
+        int targetHeight;
+        if (sourceAspect > canvasAspect) {
+          targetWidth = canvasWidth;
+          targetHeight = (canvasWidth / sourceAspect).round();
+        } else {
+          targetHeight = canvasHeight;
+          targetWidth = (canvasHeight * sourceAspect).round();
+        }
+
+        final resized = img.copyResize(
+          source,
+          width: targetWidth,
+          height: targetHeight,
+          interpolation: img.Interpolation.linear,
+        );
+
+        final canvas = img.Image(width: canvasWidth, height: canvasHeight);
+        img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
+
+        final offsetX = ((canvasWidth - targetWidth) / 2).round();
+        final offsetY = ((canvasHeight - targetHeight) / 2).round();
+        img.compositeImage(canvas, resized, dstX: offsetX, dstY: offsetY);
+        return canvas;
+      }
+
+      /// setup encoder dengan ukuran asli foto
       await FlutterQuickVideoEncoder.setup(
         width: width,
         height: height,
         fps: fps,
-        videoBitrate: 2500000,
+        videoBitrate: videoBitrate,
         audioChannels: 0,
         audioBitrate: 64000,
         sampleRate: 44100,
@@ -1128,8 +1239,8 @@ class _ResultPageState extends State<ResultPage> {
         profileLevel: ProfileLevel.mainAutoLevel,
       );
 
-      /// LOOP VIDEO 5x
-      for (int loop = 0; loop < 5; loop++) {
+      /// LOOP VIDEO beberapa kali agar durasi cukup tanpa file terlalu besar
+      for (int loop = 0; loop < loopCount; loop++) {
         for (int key in sortedKeys) {
           final photoFile = _photos[key]!;
 
@@ -1140,8 +1251,11 @@ class _ResultPageState extends State<ResultPage> {
 
           if (image == null) continue;
 
-          /// resize ke 1080x1920
-          image = img.copyResize(image, width: width, height: height);
+          /// flip horizontal agar sesuai dengan tampilan di layar (mirror)
+          image = img.flipHorizontal(image);
+
+          /// fit ke canvas tanpa mengubah rasio agar tidak gepeng
+          image = fitToCanvas(image, width, height);
 
           /// convert ke RGBA
           Uint8List rgba = image.getBytes(order: img.ChannelOrder.rgba);
@@ -1160,7 +1274,7 @@ class _ResultPageState extends State<ResultPage> {
         context.showAlertSuccess(message: 'Video berhasil dibuat');
       }
 
-      await Gal.putVideo(outputPath, album: 'Boothera Video');
+      await Gal.putVideo(outputPath, album: 'Boothera');
 
       debugPrint("Video berhasil dibuat: $outputPath");
 
