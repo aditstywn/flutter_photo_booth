@@ -8,7 +8,7 @@ import '../../../../core/style/color/colors_app.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '../../../history/pages/history_page.dart';
 import '../../../photo_booth/presentation/pages/main_page.dart';
-import '../../../setting/presentatio/pages/setting_page.dart';
+import '../../../setting/presentation/pages/setting_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

@@ -5,26 +5,28 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
-import 'package:gal/gal.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/component/buttons.dart';
 import '../../../../core/component/space.dart';
 import '../../../../core/extensions/build_context_ext.dart';
 import '../../../../core/style/color/colors_app.dart';
-import '../../../setting/data/datasource/description_wa_local_datasource.dart';
-import '../../../setting/data/datasource/printer_datasource.dart';
 import '../../../history/data/datasource/print_history_datasource.dart';
-import 'camera_page.dart';
-import 'main_page.dart';
 import '../../../setting/data/datasource/custom_button_local_datasource.dart';
 import '../../../setting/data/datasource/custom_frame_local_datasource.dart';
+import '../../../setting/data/datasource/printer_datasource.dart';
 import '../../../setting/data/models/request/button_area.dart';
 import '../../../setting/data/models/request/frame_template.dart';
+import '../../data/models/request/create_photobooth_request_model.dart';
+import '../bloc/photobooth/photobooth_bloc.dart';
+import '../bloc/qrcode/qrcode_bloc.dart';
 import '../widgets/build_tappable_area.dart';
+import 'camera_page.dart';
+import 'main_page.dart';
 
 class ResultPage extends StatefulWidget {
   final FrameTemplate? selectedTemplate;
@@ -56,8 +58,12 @@ class _ResultPageState extends State<ResultPage> {
   final GlobalKey _compositeKey = GlobalKey();
 
   bool _loading = false;
+  bool _loadingVidio = false;
 
-  String? _description = '';
+  // String? _description = '';
+  String? _qrImageUrl;
+  String? _qrVideoUrl;
+  int? idPhoto;
 
   @override
   void initState() {
@@ -66,7 +72,7 @@ class _ResultPageState extends State<ResultPage> {
     _photos = Map<int, File>.from(widget.uploadedPhotos ?? {});
     _loadSavedFrames();
     _loadSavedButtonAreas();
-    _loadDescription();
+    // _loadDescription();
   }
 
   @override
@@ -104,21 +110,21 @@ class _ResultPageState extends State<ResultPage> {
     );
   }
 
-  Future<void> _loadDescription() async {
-    try {
-      final description = await DescriptionWaLocalDatasource()
-          .loadDescription();
-      if (mounted) {
-        setState(() {
-          _description = description;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        context.showAlertError(message: 'Error loading settings: $e');
-      }
-    }
-  }
+  // Future<void> _loadDescription() async {
+  //   try {
+  //     final description = await DescriptionWaLocalDatasource()
+  //         .loadDescription();
+  //     if (mounted) {
+  //       setState(() {
+  //         _description = description;
+  //       });
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       context.showAlertError(message: 'Error loading settings: $e');
+  //     }
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -127,110 +133,452 @@ class _ResultPageState extends State<ResultPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           context.pushAndRemoveUntil(MainPage(), (route) => route.isFirst);
+          context.read<PhotoboothBloc>().add(
+            PhotoboothEvent.deleteFile(idPhoto ?? 0),
+          );
         }
       },
-      child: Scaffold(
-        body: SafeArea(
-          child: SizedBox.expand(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_resultFrame == null)
-                  Container(
-                    color: Colors.grey[300],
-                    width: double.infinity,
-                    height: double.infinity,
-                    child: const Center(
-                      child: Text(
-                        'No Main Frame Set',
-                        style: TextStyle(fontSize: 18, color: Colors.black54),
-                      ),
-                    ),
-                  )
-                else if (_resultFrame != null)
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Image.file(
-                        _resultFrame!,
-                        fit: BoxFit.fill,
+      child: BlocListener<QrcodeBloc, QrcodeState>(
+        listener: (context, state) {
+          switch (state) {
+            case LoadingQrCode():
+              setState(() {
+                _loading = true;
+              });
+              break;
+            case ErrorQrCode(:final error):
+              context.showAlertError(message: 'Gagal membuat QR code: $error');
+              setState(() {
+                _loading = false;
+              });
+              break;
+            case CreateQrSuccess(:final response):
+              setState(() {
+                _qrImageUrl = response.qrImageUrl?.replaceFirst(
+                  'http://',
+                  'https://',
+                );
+                _loading = false;
+              });
+              debugPrint('QR code created: $_qrImageUrl');
+              break;
+            case CreateQrVideoSuccess(:final response):
+              setState(() {
+                _qrVideoUrl = response.qrImageUrl?.replaceFirst(
+                  'http://',
+                  'https://',
+                );
+                _loadingVidio = false;
+              });
+              debugPrint('QR video code created: $_qrVideoUrl');
+              break;
+          }
+        },
+        child: BlocListener<PhotoboothBloc, PhotoboothState>(
+          listener: (context, state) {
+            switch (state) {
+              case LoadingPhotobooth():
+                setState(() {
+                  _loading = true;
+                });
+                break;
+              case LoadingPhotobooth3():
+                setState(() {
+                  _loadingVidio = true;
+                });
+                break;
+
+              case CreateFileSuccess(:final response):
+                context.read<QrcodeBloc>().add(
+                  QrcodeEvent.createQr(response.data?.token ?? ''),
+                );
+
+                setState(() {
+                  idPhoto = response.data?.id;
+                });
+                break;
+
+              case CreateFileVidioSuccess(:final response):
+                context.read<QrcodeBloc>().add(
+                  QrcodeEvent.createQrVideo(response.data?.token ?? ''),
+                );
+
+                setState(() {
+                  idPhoto = response.data?.id;
+                });
+                break;
+
+              case ErrorPhotobooth(:final error):
+                context.showAlertError(message: 'Upload gagal: $error');
+                setState(() {
+                  _loading = false;
+                  _loadingVidio = false;
+                });
+                break;
+            }
+          },
+          child: Scaffold(
+            body: SafeArea(
+              child: SizedBox.expand(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_resultFrame == null)
+                      Container(
+                        color: Colors.grey[300],
                         width: double.infinity,
                         height: double.infinity,
-                      );
-                    },
-                  ),
-
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, stackConstraints) {
-                      // Validasi constraint
-                      if (stackConstraints.maxWidth.isInfinite ||
-                          stackConstraints.maxHeight.isInfinite ||
-                          stackConstraints.maxWidth == 0 ||
-                          stackConstraints.maxHeight == 0) {
-                        return SizedBox.shrink();
-                      }
-
-                      return Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          //  area tappable
-                          if (_resultPreviewArea != null)
-                            buildTappableArea(
-                              area: _resultPreviewArea!,
-                              constraints: stackConstraints,
-                              isResultPreview: true,
-                              child: _buildResultPreviewWidget(
-                                _resultPreviewArea!,
-                                stackConstraints,
-                              ),
+                        child: const Center(
+                          child: Text(
+                            'No Main Frame Set',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.black54,
                             ),
-                          if (_loading)
-                            Container(
-                              color: Colors.transparent,
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      color: ColorsApp.primary,
-                                    ),
-                                    SizedBox(height: 12),
-                                    Text(
-                                      'Loading...',
-                                      style: TextStyle(
+                          ),
+                        ),
+                      )
+                    else if (_resultFrame != null)
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Image.file(
+                            _resultFrame!,
+                            fit: BoxFit.fill,
+                            width: double.infinity,
+                            height: double.infinity,
+                          );
+                        },
+                      ),
+
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, stackConstraints) {
+                          // Validasi constraint
+                          if (stackConstraints.maxWidth.isInfinite ||
+                              stackConstraints.maxHeight.isInfinite ||
+                              stackConstraints.maxWidth == 0 ||
+                              stackConstraints.maxHeight == 0) {
+                            return SizedBox.shrink();
+                          }
+
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              //  area tappable
+                              if (_resultPreviewArea != null)
+                                buildTappableArea(
+                                  area: _resultPreviewArea!,
+                                  constraints: stackConstraints,
+                                  isResultPreview: true,
+                                  child: _buildResultPreviewWidget(
+                                    _resultPreviewArea!,
+                                    stackConstraints,
+                                  ),
+                                ),
+                              if (_loading)
+                                Container(
+                                  color: Colors.transparent,
+                                  child: Center(
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 28,
+                                        vertical: 20,
+                                      ),
+                                      decoration: BoxDecoration(
                                         color: Colors.white,
-                                        fontSize: 16,
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withAlpha(35),
+                                            blurRadius: 12,
+                                            offset: Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(
+                                            color: ColorsApp.primary,
+                                            strokeWidth: 4,
+                                          ),
+                                          SizedBox(height: 12),
+                                          Text(
+                                            'Loading...',
+                                            style: TextStyle(
+                                              color: ColorsApp.primary,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          // area button di result frame
-                          ..._buttonAreasResult.map((area) {
-                            return buildTappableArea(
-                              area: area,
-                              constraints: stackConstraints,
-                              onTap: () {
-                                debugPrint(
-                                  'area print tapped ${area.function}',
+                              // area button di result frame
+                              ..._buttonAreasResult.map((area) {
+                                return buildTappableArea(
+                                  area: area,
+                                  constraints: stackConstraints,
+                                  onTap: () {
+                                    debugPrint(
+                                      'area print tapped ${area.function}',
+                                    );
+                                    if (area.function == 'Print') {
+                                      _saveAndPrintImage();
+                                    } else if (area.function == 'Retake') {
+                                      _handleRetake();
+                                    } else if (area.function == 'Share') {
+                                      _saveCompositeImage();
+                                    }
+                                  },
                                 );
-                                if (area.function == 'Print') {
-                                  _saveAndPrintImage();
-                                } else if (area.function == 'Retake') {
-                                  _handleRetake();
-                                } else if (area.function == 'Share') {
-                                  _saveCompositeImage();
-                                }
-                              },
-                            );
-                          }),
-                        ],
-                      );
-                    },
-                  ),
+                              }),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                    if (_qrImageUrl != null)
+                      Positioned.fill(
+                        child: Container(
+                          alignment: Alignment.topLeft,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: ColorsApp.grey.withAlpha(225),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (_qrImageUrl != null)
+                                  Container(
+                                    height: 200,
+                                    width: 200,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha(50),
+                                          spreadRadius: 2,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        SpaceHeight(8),
+                                        Text(
+                                          'Foto QR Code',
+                                          style: TextStyle(
+                                            color: ColorsApp.primary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SpaceHeight(8),
+                                        Center(
+                                          child: Container(
+                                            width: 150,
+                                            height: 150,
+                                            padding: EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withAlpha(
+                                                    45,
+                                                  ),
+                                                  spreadRadius: 1,
+                                                  blurRadius: 12,
+                                                  offset: Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: SvgPicture.network(
+                                              _qrImageUrl!,
+                                              fit: BoxFit.contain,
+                                              placeholderBuilder: (context) =>
+                                                  Center(
+                                                    child: SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color: Colors.black,
+                                                          ),
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  Icon(
+                                    Icons.qr_code_2,
+                                    size: 48,
+                                    color: Colors.red,
+                                  ),
+                                SpaceHeight(16),
+                                if (_qrVideoUrl != null)
+                                  Container(
+                                    height: context.deviceWidth * 0.5,
+                                    width: context.deviceWidth * 0.5,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha(50),
+                                          spreadRadius: 2,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Column(
+                                        children: [
+                                          SpaceHeight(8),
+                                          Text(
+                                            'Gif QR Code',
+                                            style: TextStyle(
+                                              color: ColorsApp.primary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          SpaceHeight(8),
+                                          Container(
+                                            width: 150,
+                                            height: 150,
+                                            padding: EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withAlpha(
+                                                    45,
+                                                  ),
+                                                  spreadRadius: 1,
+                                                  blurRadius: 12,
+                                                  offset: Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: SvgPicture.network(
+                                              _qrVideoUrl!,
+                                              fit: BoxFit.contain,
+                                              placeholderBuilder: (context) =>
+                                                  Center(
+                                                    child: SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color: Colors.black,
+                                                          ),
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Button.filled(
+                                    width: context.deviceWidth * 0.5,
+                                    label: 'Generate Gif ',
+                                    onPressed: () {
+                                      _createVideoFromPhotos();
+                                    },
+                                    loading: _loadingVidio,
+                                    color: ColorsApp.primary,
+                                  ),
+                                SpaceHeight(16),
+                                Text(
+                                  'Tekan tutup untuk kembali ke halaman utama, file foto akan terhapus otomatis setelah tekan tutup.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SpaceHeight(12),
+                                BlocConsumer<PhotoboothBloc, PhotoboothState>(
+                                  listener: (context, state) {
+                                    switch (state) {
+                                      case DeleteFileSuccess():
+                                        context.pushAndRemoveUntil(
+                                          MainPage(),
+                                          (route) => route.isFirst,
+                                        );
+                                        setState(() {
+                                          _qrImageUrl = null;
+                                          _qrVideoUrl = null;
+                                        });
+                                        break;
+                                      case ErrorPhotobooth(:final error):
+                                        context.showAlertError(message: error);
+                                        context.pushAndRemoveUntil(
+                                          MainPage(),
+                                          (route) => route.isFirst,
+                                        );
+                                        setState(() {
+                                          _qrImageUrl = null;
+                                          _qrVideoUrl = null;
+                                        });
+                                        break;
+                                    }
+                                  },
+                                  builder: (context, state) {
+                                    if (state is LoadingPhotobooth2) {
+                                      return Button.filled(
+                                        width: context.deviceWidth * 0.5,
+                                        label: 'Loading...',
+                                        onPressed: () {},
+                                        color: ColorsApp.primary,
+                                        loading: true,
+                                      );
+                                    }
+                                    return Button.filled(
+                                      width: context.deviceWidth * 0.5,
+                                      label: 'Tutup',
+                                      onPressed: () {
+                                        context.read<PhotoboothBloc>().add(
+                                          PhotoboothEvent.deleteFile(
+                                            idPhoto ?? 0,
+                                          ),
+                                        );
+                                      },
+                                      color: ColorsApp.primary,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -573,9 +921,9 @@ class _ResultPageState extends State<ResultPage> {
         // Record print in history
         await _printHistoryDatasource.recordPrint();
 
-        setState(() {
-          _loading = false;
-        });
+        // setState(() {
+        //   _loading = false;
+        // });
 
         if (mounted) {
           context.showAlertSuccess(
@@ -628,343 +976,38 @@ class _ResultPageState extends State<ResultPage> {
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(pngBytes);
 
-      // Simpan setiap foto individual yang dipakai ke galeri (dengan mirror horizontal)
-      for (
-        int i = 0;
-        i < (widget.selectedTemplate?.numberOfPhotoStrips ?? 1);
-        i++
-      ) {
-        if (_photos.containsKey(i)) {
-          // Baca foto asli
-          final originalBytes = await _photos[i]!.readAsBytes();
-          img.Image? originalImage = img.decodeImage(originalBytes);
+      // Siapkan foto yang sudah mirror untuk galeri dan upload backend.
+      final List<File> flippedPhotosForUpload = [];
+      final sortedPhotoKeys = _photos.keys.toList()..sort();
 
-          if (originalImage != null) {
-            // Flip horizontal agar sesuai dengan tampilan di layar
-            final flippedImage = img.flipHorizontal(originalImage);
+      for (final i in sortedPhotoKeys) {
+        final originalPhoto = _photos[i];
+        if (originalPhoto == null) continue;
 
-            // Simpan ke file temporary
-            final tempDir = await getApplicationDocumentsDirectory();
-            final flippedPath =
-                '${tempDir.path}/flipped_photo_${i}_$timestamp.jpg';
-            final flippedFile = File(flippedPath);
-            await flippedFile.writeAsBytes(img.encodeJpg(flippedImage));
+        final originalBytes = await originalPhoto.readAsBytes();
+        img.Image? originalImage = img.decodeImage(originalBytes);
 
-            // Simpan ke galeri
-            await Gal.putImage(flippedFile.path, album: 'Boothera');
+        if (originalImage == null) continue;
 
-            // Hapus file temporary
-            await flippedFile.delete();
-          }
-        }
+        final flippedImage = img.flipHorizontal(originalImage);
+
+        final tempDir = await getApplicationDocumentsDirectory();
+        final flippedPath = '${tempDir.path}/flipped_photo_${i}_$timestamp.jpg';
+        final flippedFile = File(flippedPath);
+        await flippedFile.writeAsBytes(img.encodeJpg(flippedImage));
+
+        flippedPhotosForUpload.add(flippedFile);
       }
 
-      // Simpan hasil komposit ke galeri
-      await Gal.putImage(imageFile.path, album: 'Boothera');
-
-      String? videoPath = await _createVideoFromPhotos();
-
-      if (videoPath != null && imageFile.existsSync()) {
+      if (imageFile.existsSync()) {
         if (mounted) {
-          // Tampilkan dialog sukses dengan pratinjau & form WA
-          showDialog(
-            context: context,
-            builder: (dialogContext) {
-              final waController = TextEditingController();
-              bool isSendingWa = false;
-              return StatefulBuilder(
-                builder: (context, setDialogState) {
-                  return AlertDialog(
-                    backgroundColor: Color(0xFF2A2A3E),
-                    title: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green, size: 28),
-                        SpaceWidth(12),
-                        Text(
-                          'Tersimpan!',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                    content: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              imageFile,
-                              height: 180,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          SpaceHeight(16),
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white10,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.check,
-                                  color: Colors.green,
-                                  size: 14,
-                                ),
-                                SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Gambar berhasil disimpan',
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ...[
-                            SpaceHeight(12),
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white10,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.check,
-                                    color: Colors.green,
-                                    size: 14,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Video gif berhasil disimpan',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+          final createFiles = CreatePhotoboothRequestModel(
+            photoTemplate: imageFile,
+            photoOri: flippedPhotosForUpload,
+          );
 
-                          SpaceHeight(20),
-                          Divider(color: Colors.white24),
-                          SpaceHeight(12),
-                          Row(
-                            children: [
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF25D366),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'W',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Kirim ke WhatsApp',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SpaceHeight(10),
-                          TextField(
-                            controller: waController,
-                            keyboardType: TextInputType.phone,
-                            style: TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Contoh: 628123456789',
-                              hintStyle: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 13,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.phone,
-                                color: Color(0xFF25D366),
-                                size: 20,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(color: Colors.white24),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: Color(0xFF25D366),
-                                ),
-                              ),
-                              filled: true,
-                              fillColor: Colors.white10,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                            ),
-                          ),
-                          SpaceHeight(8),
-                          Text(
-                            'Masukkan nomor WA dengan kode negara (tanpa +)',
-                            style: TextStyle(color: Colors.grey, fontSize: 10),
-                          ),
-                          SpaceHeight(10),
-                          Container(
-                            padding: EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Color(0xFF25D366).withAlpha(30),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Color(0xFF25D366).withAlpha(80),
-                              ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  color: Color(0xFF25D366),
-                                  size: 14,
-                                ),
-                                SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Foto otomatis disimpan ke Galeri.\nBuka WA → ketuk lampiran (📎) → pilih dari Galeri.',
-                                    style: TextStyle(
-                                      color: Color(0xFF25D366),
-                                      fontSize: 10,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context, true);
-                        },
-                        child: Text(
-                          'Tutup',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: isSendingWa
-                            ? null
-                            : () async {
-                                final rawNumber = waController.text
-                                    .trim()
-                                    .replaceAll(RegExp(r'[^0-9]'), '');
-                                if (rawNumber.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Masukkan nomor WhatsApp'),
-                                      backgroundColor: Colors.orange,
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                  return;
-                                }
-                                setDialogState(() => isSendingWa = true);
-                                try {
-                                  // Buka WhatsApp langsung ke chat nomor
-                                  // (berfungsi meski nomor tidak ada di kontak)
-                                  final waUrl = Uri.parse(
-                                    'whatsapp://send?phone=$rawNumber&text=$_description',
-                                  );
-                                  if (await canLaunchUrl(waUrl)) {
-                                    await launchUrl(
-                                      waUrl,
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                    // Reminder untuk attach foto
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Ketuk 📎 di WA → pilih foto dari Galeri',
-                                          ),
-                                          backgroundColor: ColorsApp.primary,
-                                          behavior: SnackBarBehavior.floating,
-                                          duration: Duration(seconds: 5),
-                                        ),
-                                      );
-                                      context.pushAndRemoveUntil(
-                                        MainPage(),
-                                        (route) => route.isFirst,
-                                      );
-                                    }
-                                  } else {
-                                    // WA tidak terinstall, fallback ke share sheet
-                                    await Share.shareXFiles([
-                                      XFile(imagePath),
-                                    ], text: 'Foto dari Photo Booth');
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Error: $e'),
-                                        backgroundColor: Colors.red,
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  setDialogState(() => isSendingWa = false);
-                                }
-                              },
-                        icon: isSendingWa
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(Icons.send, size: 16),
-                        label: Text('Buka WA'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF25D366),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
+          context.read<PhotoboothBloc>().add(
+            PhotoboothEvent.createFile(createFiles),
           );
         }
       }
@@ -984,10 +1027,21 @@ class _ResultPageState extends State<ResultPage> {
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
-            title: Text('Konfirmasi'),
+            backgroundColor: ColorsApp.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              'Konfirmasi',
+              style: TextStyle(
+                color: ColorsApp.primary,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             content: Text(
               'Apakah Anda yakin ingin mengambil ulang foto?',
-              style: TextStyle(fontSize: 14),
+              style: TextStyle(fontSize: 14, color: ColorsApp.textSecondary),
             ),
             actions: [
               TextButton(
@@ -1000,9 +1054,12 @@ class _ResultPageState extends State<ResultPage> {
                   _retakeSinglePhoto(0);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF00B894),
+                  backgroundColor: ColorsApp.primary,
                 ),
-                child: Text('Ambil Ulang'),
+                child: Text(
+                  'Ambil Ulang',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           );
@@ -1135,7 +1192,7 @@ class _ResultPageState extends State<ResultPage> {
     }
   }
 
-  Future<String?> _createVideoFromPhotos() async {
+  Future<File?> _createVideoFromPhotos() async {
     try {
       if (_photos.isEmpty) {
         debugPrint('Tidak ada foto untuk membuat video');
@@ -1143,7 +1200,7 @@ class _ResultPageState extends State<ResultPage> {
       }
 
       setState(() {
-        _loading = true;
+        _loadingVidio = true;
       });
 
       final directory = await getApplicationDocumentsDirectory();
@@ -1160,7 +1217,7 @@ class _ResultPageState extends State<ResultPage> {
       if (firstImage == null) {
         debugPrint('Gagal decode foto pertama');
         setState(() {
-          _loading = false;
+          _loadingVidio = false;
         });
         return null;
       }
@@ -1271,25 +1328,22 @@ class _ResultPageState extends State<ResultPage> {
       await FlutterQuickVideoEncoder.finish();
 
       if (mounted) {
-        context.showAlertSuccess(message: 'Video berhasil dibuat');
+        final videoFile = File(outputPath);
+        if (videoFile.existsSync()) {
+          context.read<PhotoboothBloc>().add(
+            PhotoboothEvent.createFileVidio(videoFile, idPhoto ?? 0),
+          );
+        } else {
+          context.showAlertError(message: 'Gagal membuat video');
+        }
       }
-
-      await Gal.putVideo(outputPath, album: 'Boothera');
 
       debugPrint("Video berhasil dibuat: $outputPath");
 
-      setState(() {
-        _loading = false;
-      });
-
-      if (mounted) {
-        context.showAlertSuccess(message: 'Video berhasil disimpan ke galeri');
-      }
-
-      return outputPath;
+      return File(outputPath);
     } catch (e) {
       setState(() {
-        _loading = false;
+        _loadingVidio = false;
       });
       debugPrint('Error in _createVideoFromPhotos: $e');
 

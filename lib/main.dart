@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_photo_booth/features/auth/presentation/pages/splash_page.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/style/theme/photo_booth_theme.dart';
-import 'features/auth/data/datasource/auth_local_datasource.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
-import 'features/auth/presentation/pages/login_page.dart';
-import 'features/home/presentation/pages/home_page.dart';
+import 'features/auth/presentation/pages/splash_page.dart';
+import 'features/photo_booth/data/datasource/photo_booth_remote_datasource.dart';
+import 'features/photo_booth/presentation/bloc/photobooth/photobooth_bloc.dart';
+import 'features/photo_booth/presentation/bloc/qrcode/qrcode_bloc.dart';
+import 'features/photo_booth/presentation/bloc/settings/settings_bloc.dart';
 import 'features/token/data/datasource/token_local_datasource.dart';
 import 'features/token/presentation/bloc/token_bloc.dart';
 
@@ -21,8 +22,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider(
-      create: (context) => TokenLocalDatasource(),
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider(create: (context) => TokenLocalDatasource()),
+        RepositoryProvider(create: (context) => PhotoBoothRemoteDatasource()),
+      ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
@@ -31,6 +35,19 @@ class MyApp extends StatelessWidget {
           ),
           BlocProvider(
             create: (context) => AuthBloc(context.read<TokenLocalDatasource>()),
+          ),
+          BlocProvider(
+            create: (context) =>
+                PhotoboothBloc(context.read<PhotoBoothRemoteDatasource>()),
+          ),
+          BlocProvider(
+            create: (context) =>
+                QrcodeBloc(context.read<PhotoBoothRemoteDatasource>()),
+          ),
+
+          BlocProvider(
+            create: (context) =>
+                SettingsBloc(context.read<PhotoBoothRemoteDatasource>()),
           ),
         ],
         child: MaterialApp(

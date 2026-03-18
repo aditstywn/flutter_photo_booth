@@ -751,16 +751,16 @@ class _TestAreaButtonPageState extends State<TestAreaButtonPage> {
       return;
     }
 
-    if (function == 'Share') {
-      if (_uploadedPhotos.isEmpty) {
-        context.showAlertError(message: 'Belum ada foto untuk dibagikan');
-        return;
-      }
+    // if (function == 'Share') {
+    //   if (_uploadedPhotos.isEmpty) {
+    //     context.showAlertError(message: 'Belum ada foto untuk dibagikan');
+    //     return;
+    //   }
 
-      _saveCompositeImage();
+    //   _saveCompositeImage();
 
-      return;
-    }
+    //   return;
+    // }
 
     // Jika Retake, tampilkan dialog retake
     if (function == 'Retake') {

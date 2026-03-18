@@ -7,7 +7,7 @@ import '../../../setting/data/datasource/custom_button_local_datasource.dart';
 import '../../../setting/data/datasource/custom_frame_local_datasource.dart';
 import '../../../setting/data/datasource/voucher_local_datasource.dart';
 import '../../../setting/data/models/request/button_area.dart';
-import '../../../setting/presentatio/pages/voucher_input_page.dart';
+import '../../../setting/presentation/pages/voucher_input_page.dart';
 import '../widgets/build_tappable_area.dart';
 import 'template_page.dart';
 

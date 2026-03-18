@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/component/space.dart';
 import '../../../../core/extensions/build_context_ext.dart';
-import '../../../token/presentation/pages/generate_token_page.dart';
 import '../widgets/setting_menu_card.dart';
 import 'countdown_setting_page.dart';
 import 'custom_button_tema_page.dart';
 import 'custom_tema_page.dart';
-import 'description_wa_page.dart';
 import 'frame_template_list_page.dart';
 import 'generate_voucher_page.dart';
 import 'setting_printer_page.dart';
+import 'statistics_page.dart';
 import 'test_area_button_page.dart';
 
 class SettingPage extends StatefulWidget {
@@ -79,16 +78,16 @@ class _SettingPageState extends State<SettingPage> {
                 context.push(const CountdownSettingPage());
               },
             ),
-            SpaceHeight(16),
-            SettingMenuCard(
-              icon: Icons.description_rounded,
-              title: 'Description WA',
-              subtitle: 'Atur description yang akan dikirim ke WA',
-              color: Color(0xFF0984E3),
-              onTap: () {
-                context.push(const DescriptionWaPage());
-              },
-            ),
+            // SpaceHeight(16),
+            // SettingMenuCard(
+            //   icon: Icons.description_rounded,
+            //   title: 'Description WA',
+            //   subtitle: 'Atur description yang akan dikirim ke WA',
+            //   color: Color(0xFF0984E3),
+            //   onTap: () {
+            //     context.push(const DescriptionWaPage());
+            //   },
+            // ),
             SpaceHeight(16),
             SettingMenuCard(
               icon: Icons.print_rounded,
@@ -107,6 +106,16 @@ class _SettingPageState extends State<SettingPage> {
               color: Color(0xFF6C5CE7),
               onTap: () {
                 context.push(const GenerateVoucherPage());
+              },
+            ),
+            SpaceHeight(16),
+            SettingMenuCard(
+              icon: Icons.analytics_outlined,
+              title: 'Statistik',
+              subtitle: 'Lihat ringkasan statistik file aplikasi',
+              color: Color(0xFF00A896),
+              onTap: () {
+                context.push(const StatisticsPage());
               },
             ),
             // SpaceHeight(16),
