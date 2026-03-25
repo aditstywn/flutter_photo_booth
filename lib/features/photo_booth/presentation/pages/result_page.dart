@@ -330,6 +330,9 @@ class _ResultPageState extends State<ResultPage> {
                                     } else if (area.function == 'Retake') {
                                       _handleRetake();
                                     } else if (area.function == 'Share') {
+                                      setState(() {
+                                        _loading = true;
+                                      });
                                       _saveCompositeImage();
                                     }
                                   },
@@ -350,229 +353,281 @@ class _ResultPageState extends State<ResultPage> {
                             color: ColorsApp.grey.withAlpha(225),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                if (_qrImageUrl != null)
-                                  Container(
-                                    height: 200,
-                                    width: 200,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withAlpha(50),
-                                          spreadRadius: 2,
-                                          blurRadius: 8,
-                                          offset: Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        SpaceHeight(8),
-                                        Text(
-                                          'Foto QR Code',
-                                          style: TextStyle(
-                                            color: ColorsApp.primary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                          child: LayoutBuilder(
+                            builder: (context, overlayConstraints) {
+                              final cardSize = math.min(
+                                (overlayConstraints.maxWidth * 0.6).clamp(
+                                  180.0,
+                                  320.0,
+                                ),
+                                (overlayConstraints.maxHeight * 0.32).clamp(
+                                  180.0,
+                                  320.0,
+                                ),
+                              );
+                              final qrSize = (cardSize * 0.72).clamp(
+                                130.0,
+                                240.0,
+                              );
+
+                              return Center(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      if (_qrImageUrl != null)
+                                        Container(
+                                          height: cardSize,
+                                          width: cardSize,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withAlpha(
+                                                  50,
+                                                ),
+                                                spreadRadius: 2,
+                                                blurRadius: 8,
+                                                offset: Offset(0, 4),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                        SpaceHeight(8),
-                                        Center(
-                                          child: Container(
-                                            width: 150,
-                                            height: 150,
-                                            padding: EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withAlpha(
-                                                    45,
+                                          child: Column(
+                                            children: [
+                                              SpaceHeight(8),
+                                              Text(
+                                                'Foto QR Code',
+                                                style: TextStyle(
+                                                  color: ColorsApp.primary,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              SpaceHeight(8),
+                                              Center(
+                                                child: Container(
+                                                  width: qrSize,
+                                                  height: qrSize,
+                                                  padding: EdgeInsets.all(10),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black
+                                                            .withAlpha(45),
+                                                        spreadRadius: 1,
+                                                        blurRadius: 12,
+                                                        offset: Offset(0, 6),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  spreadRadius: 1,
-                                                  blurRadius: 12,
-                                                  offset: Offset(0, 6),
+                                                  child: SvgPicture.network(
+                                                    _qrImageUrl!,
+                                                    fit: BoxFit.contain,
+                                                    placeholderBuilder:
+                                                        (context) => Center(
+                                                          child: SizedBox(
+                                                            width: 24,
+                                                            height: 24,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                  color: Colors
+                                                                      .black,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      else
+                                        Icon(
+                                          Icons.qr_code_2,
+                                          size: 48,
+                                          color: Colors.red,
+                                        ),
+                                      SpaceHeight(16),
+                                      if (_qrVideoUrl != null)
+                                        Container(
+                                          height: cardSize,
+                                          width: cardSize,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withAlpha(
+                                                  50,
+                                                ),
+                                                spreadRadius: 2,
+                                                blurRadius: 8,
+                                                offset: Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Center(
+                                            child: Column(
+                                              children: [
+                                                SpaceHeight(8),
+                                                Text(
+                                                  'Gif QR Code',
+                                                  style: TextStyle(
+                                                    color: ColorsApp.primary,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                SpaceHeight(8),
+                                                Container(
+                                                  width: qrSize,
+                                                  height: qrSize,
+                                                  padding: EdgeInsets.all(10),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black
+                                                            .withAlpha(45),
+                                                        spreadRadius: 1,
+                                                        blurRadius: 12,
+                                                        offset: Offset(0, 6),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: SvgPicture.network(
+                                                    _qrVideoUrl!,
+                                                    fit: BoxFit.contain,
+                                                    placeholderBuilder:
+                                                        (context) => Center(
+                                                          child: SizedBox(
+                                                            width: 24,
+                                                            height: 24,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                  color: Colors
+                                                                      .black,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                  ),
                                                 ),
                                               ],
                                             ),
-                                            child: SvgPicture.network(
-                                              _qrImageUrl!,
-                                              fit: BoxFit.contain,
-                                              placeholderBuilder: (context) =>
-                                                  Center(
-                                                    child: SizedBox(
-                                                      width: 24,
-                                                      height: 24,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color: Colors.black,
-                                                          ),
-                                                    ),
-                                                  ),
-                                            ),
                                           ),
+                                        )
+                                      else
+                                        Button.filled(
+                                          width: math.min(
+                                            context.deviceWidth * 0.6,
+                                            cardSize,
+                                          ),
+                                          label: 'Generate Gif ',
+                                          onPressed: () {
+                                            _createVideoFromPhotos();
+                                          },
+                                          loading: _loadingVidio,
+                                          color: ColorsApp.primary,
                                         ),
-                                      ],
-                                    ),
-                                  )
-                                else
-                                  Icon(
-                                    Icons.qr_code_2,
-                                    size: 48,
-                                    color: Colors.red,
-                                  ),
-                                SpaceHeight(16),
-                                if (_qrVideoUrl != null)
-                                  Container(
-                                    height: context.deviceWidth * 0.5,
-                                    width: context.deviceWidth * 0.5,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withAlpha(50),
-                                          spreadRadius: 2,
-                                          blurRadius: 8,
-                                          offset: Offset(0, 4),
+                                      SpaceHeight(16),
+                                      Text(
+                                        'Tekan tutup untuk kembali ke halaman utama, file foto akan terhapus otomatis setelah tekan tutup.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                      ],
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        children: [
-                                          SpaceHeight(8),
-                                          Text(
-                                            'Gif QR Code',
-                                            style: TextStyle(
-                                              color: ColorsApp.primary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SpaceHeight(8),
-                                          Container(
-                                            width: 150,
-                                            height: 150,
-                                            padding: EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withAlpha(
-                                                    45,
-                                                  ),
-                                                  spreadRadius: 1,
-                                                  blurRadius: 12,
-                                                  offset: Offset(0, 6),
-                                                ),
-                                              ],
-                                            ),
-                                            child: SvgPicture.network(
-                                              _qrVideoUrl!,
-                                              fit: BoxFit.contain,
-                                              placeholderBuilder: (context) =>
-                                                  Center(
-                                                    child: SizedBox(
-                                                      width: 24,
-                                                      height: 24,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color: Colors.black,
-                                                          ),
-                                                    ),
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
                                       ),
-                                    ),
-                                  )
-                                else
-                                  Button.filled(
-                                    width: context.deviceWidth * 0.5,
-                                    label: 'Generate Gif ',
-                                    onPressed: () {
-                                      _createVideoFromPhotos();
-                                    },
-                                    loading: _loadingVidio,
-                                    color: ColorsApp.primary,
-                                  ),
-                                SpaceHeight(16),
-                                Text(
-                                  'Tekan tutup untuk kembali ke halaman utama, file foto akan terhapus otomatis setelah tekan tutup.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
+                                      SpaceHeight(12),
+                                      BlocConsumer<
+                                        PhotoboothBloc,
+                                        PhotoboothState
+                                      >(
+                                        listener: (context, state) {
+                                          switch (state) {
+                                            case DeleteFileSuccess():
+                                              context.pushAndRemoveUntil(
+                                                MainPage(),
+                                                (route) => route.isFirst,
+                                              );
+                                              setState(() {
+                                                _qrImageUrl = null;
+                                                _qrVideoUrl = null;
+                                              });
+                                              break;
+                                            case ErrorPhotobooth(:final error):
+                                              context.showAlertError(
+                                                message: error,
+                                              );
+                                              context.pushAndRemoveUntil(
+                                                MainPage(),
+                                                (route) => route.isFirst,
+                                              );
+                                              setState(() {
+                                                _qrImageUrl = null;
+                                                _qrVideoUrl = null;
+                                              });
+                                              break;
+                                          }
+                                        },
+                                        builder: (context, state) {
+                                          if (state is LoadingPhotobooth2) {
+                                            return Button.filled(
+                                              width: math.min(
+                                                context.deviceWidth * 0.6,
+                                                cardSize,
+                                              ),
+                                              label: 'Loading...',
+                                              onPressed: () {},
+                                              color: ColorsApp.primary,
+                                              loading: true,
+                                            );
+                                          }
+                                          return Button.filled(
+                                            width: math.min(
+                                              context.deviceWidth * 0.6,
+                                              cardSize,
+                                            ),
+                                            label: 'Tutup',
+                                            onPressed: () {
+                                              context
+                                                  .read<PhotoboothBloc>()
+                                                  .add(
+                                                    PhotoboothEvent.deleteFile(
+                                                      idPhoto ?? 0,
+                                                    ),
+                                                  );
+                                            },
+                                            color: ColorsApp.primary,
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SpaceHeight(12),
-                                BlocConsumer<PhotoboothBloc, PhotoboothState>(
-                                  listener: (context, state) {
-                                    switch (state) {
-                                      case DeleteFileSuccess():
-                                        context.pushAndRemoveUntil(
-                                          MainPage(),
-                                          (route) => route.isFirst,
-                                        );
-                                        setState(() {
-                                          _qrImageUrl = null;
-                                          _qrVideoUrl = null;
-                                        });
-                                        break;
-                                      case ErrorPhotobooth(:final error):
-                                        context.showAlertError(message: error);
-                                        context.pushAndRemoveUntil(
-                                          MainPage(),
-                                          (route) => route.isFirst,
-                                        );
-                                        setState(() {
-                                          _qrImageUrl = null;
-                                          _qrVideoUrl = null;
-                                        });
-                                        break;
-                                    }
-                                  },
-                                  builder: (context, state) {
-                                    if (state is LoadingPhotobooth2) {
-                                      return Button.filled(
-                                        width: context.deviceWidth * 0.5,
-                                        label: 'Loading...',
-                                        onPressed: () {},
-                                        color: ColorsApp.primary,
-                                        loading: true,
-                                      );
-                                    }
-                                    return Button.filled(
-                                      width: context.deviceWidth * 0.5,
-                                      label: 'Tutup',
-                                      onPressed: () {
-                                        context.read<PhotoboothBloc>().add(
-                                          PhotoboothEvent.deleteFile(
-                                            idPhoto ?? 0,
-                                          ),
-                                        );
-                                      },
-                                      color: ColorsApp.primary,
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -921,9 +976,9 @@ class _ResultPageState extends State<ResultPage> {
         // Record print in history
         await _printHistoryDatasource.recordPrint();
 
-        // setState(() {
-        //   _loading = false;
-        // });
+        setState(() {
+          _loading = false;
+        });
 
         if (mounted) {
           context.showAlertSuccess(
@@ -935,11 +990,18 @@ class _ResultPageState extends State<ResultPage> {
           context.showAlertError(message: 'Test print gagal: $e');
           debugPrint('Test print error: $e');
         }
+
+        setState(() {
+          _loading = false;
+        });
       }
     } catch (e) {
       if (mounted) {
         context.showAlertError(message: 'Gagal menyimpan gambar: $e');
       }
+      setState(() {
+        _loading = false;
+      });
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/component/space.dart';
 import '../../../../core/extensions/build_context_ext.dart';
+import '../../../token/presentation/pages/generate_token_page.dart';
 import '../widgets/setting_menu_card.dart';
 import 'countdown_setting_page.dart';
 import 'custom_button_tema_page.dart';
@@ -108,16 +109,16 @@ class _SettingPageState extends State<SettingPage> {
                 context.push(const GenerateVoucherPage());
               },
             ),
-            SpaceHeight(16),
-            SettingMenuCard(
-              icon: Icons.analytics_outlined,
-              title: 'Statistik',
-              subtitle: 'Lihat ringkasan statistik file aplikasi',
-              color: Color(0xFF00A896),
-              onTap: () {
-                context.push(const StatisticsPage());
-              },
-            ),
+            // SpaceHeight(16),
+            // SettingMenuCard(
+            //   icon: Icons.analytics_outlined,
+            //   title: 'Statistik',
+            //   subtitle: 'Lihat ringkasan statistik file aplikasi',
+            //   color: Color(0xFF00A896),
+            //   onTap: () {
+            //     context.push(const StatisticsPage());
+            //   },
+            // ),
             // SpaceHeight(16),
             // SettingMenuCard(
             //   icon: Icons.vpn_key_rounded,

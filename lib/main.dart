@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/style/theme/photo_booth_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
+import 'features/home/presentation/pages/home_page.dart';
 import 'features/photo_booth/data/datasource/photo_booth_remote_datasource.dart';
 import 'features/photo_booth/presentation/bloc/photobooth/photobooth_bloc.dart';
 import 'features/photo_booth/presentation/bloc/qrcode/qrcode_bloc.dart';
