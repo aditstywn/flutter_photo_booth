@@ -122,6 +122,16 @@ Future<List<Uint8List>> _prepareVideoFramesIsolate(
   return preparedFrames;
 }
 
+class _PreparedUploadAssets {
+  final File compositeFile;
+  final List<File> flippedPhotos;
+
+  const _PreparedUploadAssets({
+    required this.compositeFile,
+    required this.flippedPhotos,
+  });
+}
+
 class ResultPage extends StatefulWidget {
   final FrameTemplate? selectedTemplate;
   final Size? templateImageSize;
@@ -160,6 +170,11 @@ class _ResultPageState extends State<ResultPage> {
   String? _qrVideoUrl;
   int? idPhoto;
 
+  File? _cachedCompositeFile;
+  List<File>? _cachedFlippedPhotos;
+  int _assetGeneration = 0;
+  Future<_PreparedUploadAssets?>? _prepareUploadAssetsTask;
+
   @override
   void initState() {
     super.initState();
@@ -168,6 +183,10 @@ class _ResultPageState extends State<ResultPage> {
     _loadSavedFrames();
     _loadSavedButtonAreas();
     _loadDescription();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _warmUpUploadAssetsIfReady();
+    });
   }
 
   @override
@@ -191,6 +210,9 @@ class _ResultPageState extends State<ResultPage> {
       onLoadedResultPreview: (resultPreviewArea) {
         setState(() {
           _resultPreviewArea = resultPreviewArea;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _warmUpUploadAssetsIfReady();
         });
       },
       onLoadedResult: (buttonAreasResult) {
@@ -1121,74 +1143,182 @@ class _ResultPageState extends State<ResultPage> {
   }
 
   Future<void> _saveCompositeImage() async {
-    if (_photos.length != widget.selectedTemplate?.numberOfPhotoStrips) {
+    if (!_isPhotoSetComplete) {
       context.showAlertError(message: 'Please upload all photos first');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
       return;
     }
 
     try {
-      await WidgetsBinding.instance.endOfFrame;
-
-      // Tangkap widget komposit sebagai gambar
-      final boundaryContext = _compositeKey.currentContext;
-      if (boundaryContext == null) {
+      final preparedAssets = await _getOrPrepareUploadAssets(showErrors: true);
+      if (preparedAssets == null) {
         if (mounted) {
-          context.showAlertError(message: 'Preview belum siap, coba lagi.');
+          setState(() {
+            _loading = false;
+          });
         }
         return;
       }
 
-      if (context.mounted) {
-        final RenderRepaintBoundary boundary =
-            boundaryContext.findRenderObject() as RenderRepaintBoundary;
+      if (mounted) {
+        final createFiles = CreatePhotoboothRequestModel(
+          photoTemplate: preparedAssets.compositeFile,
+          photoOri: preparedAssets.flippedPhotos,
+        );
 
-        // Tunggu frame berikutnya untuk memastikan rendering selesai
-        await Future.delayed(Duration(milliseconds: 100));
-
-        ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-        var byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        var pngBytes = byteData!.buffer.asUint8List();
-
-        // Simpan ke perangkat
-        final directory = await getApplicationDocumentsDirectory();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final imagePath = '${directory.path}/photoboot_$timestamp.png';
-
-        final imageFile = File(imagePath);
-        await imageFile.writeAsBytes(pngBytes);
-
-        final sortedPhotoKeys = _photos.keys.toList()..sort();
-        final sortedPhotoPaths = sortedPhotoKeys
-            .map((key) => _photos[key]?.path)
-            .whereType<String>()
-            .toList();
-
-        // Decode/flip/encode gambar dipindahkan ke isolate agar UI tidak stutter.
-        final flippedPhotoPaths = await compute(_flipAndStorePhotosIsolate, {
-          'photoPaths': sortedPhotoPaths,
-          'outputDir': directory.path,
-          'timestamp': timestamp,
-        });
-
-        final flippedPhotosForUpload = flippedPhotoPaths.map(File.new).toList();
-
-        if (imageFile.existsSync()) {
-          if (mounted) {
-            final createFiles = CreatePhotoboothRequestModel(
-              photoTemplate: imageFile,
-              photoOri: flippedPhotosForUpload,
-            );
-
-            context.read<PhotoboothBloc>().add(
-              PhotoboothEvent.createFile(createFiles),
-            );
-          }
-        }
+        context.read<PhotoboothBloc>().add(
+          PhotoboothEvent.createFile(createFiles),
+        );
       }
     } catch (e) {
       if (mounted) {
         context.showAlertError(message: 'Gagal menyimpan gambar: $e');
+        setState(() {
+          _loading = false;
+        });
       }
+    }
+  }
+
+  bool get _isPhotoSetComplete {
+    final total = widget.selectedTemplate?.numberOfPhotoStrips;
+    if (total == null) return false;
+    return _photos.length == total;
+  }
+
+  void _invalidateUploadAssetsCache() {
+    _assetGeneration += 1;
+    _cachedCompositeFile = null;
+    _cachedFlippedPhotos = null;
+  }
+
+  void _warmUpUploadAssetsIfReady() {
+    if (!_isPhotoSetComplete) return;
+    _getOrPrepareUploadAssets(showErrors: false);
+  }
+
+  Future<_PreparedUploadAssets?> _getOrPrepareUploadAssets({
+    required bool showErrors,
+  }) async {
+    final cachedComposite = _cachedCompositeFile;
+    final cachedFlipped = _cachedFlippedPhotos;
+
+    if (cachedComposite != null &&
+        cachedComposite.existsSync() &&
+        cachedFlipped != null &&
+        cachedFlipped.isNotEmpty &&
+        cachedFlipped.every((file) => file.existsSync())) {
+      return _PreparedUploadAssets(
+        compositeFile: cachedComposite,
+        flippedPhotos: cachedFlipped,
+      );
+    }
+
+    if (_prepareUploadAssetsTask != null) {
+      return _prepareUploadAssetsTask;
+    }
+
+    final task = _prepareUploadAssets(showErrors: showErrors);
+    _prepareUploadAssetsTask = task;
+
+    try {
+      return await task;
+    } finally {
+      if (identical(_prepareUploadAssetsTask, task)) {
+        _prepareUploadAssetsTask = null;
+      }
+    }
+  }
+
+  Future<_PreparedUploadAssets?> _prepareUploadAssets({
+    required bool showErrors,
+  }) async {
+    if (!_isPhotoSetComplete) {
+      if (showErrors && mounted) {
+        context.showAlertError(message: 'Please upload all photos first');
+      }
+      return null;
+    }
+
+    final generationAtStart = _assetGeneration;
+
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+
+      final boundaryContext = _compositeKey.currentContext;
+      if (boundaryContext == null) {
+        if (showErrors && mounted) {
+          context.showAlertError(message: 'Preview belum siap, coba lagi.');
+        }
+        return null;
+      }
+
+      final renderObject = boundaryContext.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary) {
+        if (showErrors && mounted) {
+          context.showAlertError(message: 'Preview belum siap, coba lagi.');
+        }
+        return null;
+      }
+
+      // Delay singkat untuk memastikan area preview sudah terpaint sempurna.
+      await Future.delayed(Duration(milliseconds: 60));
+
+      final ui.Image image = await renderObject.toImage(pixelRatio: 1.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw Exception('Gagal konversi hasil komposit.');
+      }
+      final pngBytes = byteData.buffer.asUint8List();
+
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final imagePath = '${directory.path}/photoboot_$timestamp.png';
+
+      final imageFile = File(imagePath);
+      await imageFile.writeAsBytes(pngBytes, flush: true);
+
+      final sortedPhotoKeys = _photos.keys.toList()..sort();
+      final sortedPhotoPaths = sortedPhotoKeys
+          .map((key) => _photos[key]?.path)
+          .whereType<String>()
+          .toList();
+
+      final flippedPhotoPaths = await compute(_flipAndStorePhotosIsolate, {
+        'photoPaths': sortedPhotoPaths,
+        'outputDir': directory.path,
+        'timestamp': timestamp,
+      });
+
+      final flippedPhotosForUpload = flippedPhotoPaths
+          .map(File.new)
+          .where((file) => file.existsSync())
+          .toList();
+
+      if (flippedPhotosForUpload.isEmpty) {
+        throw Exception('Gagal menyiapkan foto asli.');
+      }
+
+      final preparedAssets = _PreparedUploadAssets(
+        compositeFile: imageFile,
+        flippedPhotos: flippedPhotosForUpload,
+      );
+
+      if (mounted && generationAtStart == _assetGeneration) {
+        _cachedCompositeFile = preparedAssets.compositeFile;
+        _cachedFlippedPhotos = preparedAssets.flippedPhotos;
+      }
+
+      return preparedAssets;
+    } catch (e) {
+      if (showErrors && mounted) {
+        context.showAlertError(message: 'Gagal menyiapkan file upload: $e');
+      }
+      return null;
     }
   }
 
@@ -1654,6 +1784,7 @@ class _ResultPageState extends State<ResultPage> {
                     setState(() {
                       _photos.clear();
                     });
+                    _invalidateUploadAssetsCache();
                     context.showAlertSuccess(
                       message: 'Silakan ambil ulang semua foto',
                     );
@@ -1685,19 +1816,12 @@ class _ResultPageState extends State<ResultPage> {
       setState(() {
         _photos[photoIndex] = newPhoto;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Foto ${photoIndex + 1} berhasil diambil ulang'),
-            ],
-          ),
-          backgroundColor: Color(0xFF00B894),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
-        ),
+      _invalidateUploadAssetsCache();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _warmUpUploadAssetsIfReady();
+      });
+      context.showAlertSuccess(
+        message: 'Foto ${photoIndex + 1} berhasil diupdate',
       );
     }
   }

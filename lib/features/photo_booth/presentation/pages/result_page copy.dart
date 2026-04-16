@@ -1145,7 +1145,7 @@ class _ResultPageState extends State<ResultPage> {
         // Tunggu frame berikutnya untuk memastikan rendering selesai
         await Future.delayed(Duration(milliseconds: 100));
 
-        ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        ui.Image image = await boundary.toImage(pixelRatio: 1.0);
         var byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         var pngBytes = byteData!.buffer.asUint8List();
 

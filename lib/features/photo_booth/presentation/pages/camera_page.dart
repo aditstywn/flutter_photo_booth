@@ -159,7 +159,8 @@ class _CameraPageState extends State<CameraPage> {
 
       _cameraController = CameraController(
         bestCamera,
-        ResolutionPreset.max, // supaya foto photobooth tajam
+        // ResolutionPreset.max, // supaya foto photobooth tajam
+        ResolutionPreset.high,
         enableAudio: false,
       );
 

@@ -7,6 +7,7 @@ import '../widgets/setting_menu_card.dart';
 import 'countdown_setting_page.dart';
 import 'custom_button_tema_page.dart';
 import 'custom_tema_page.dart';
+import 'description_wa_page.dart';
 import 'frame_template_list_page.dart';
 import 'generate_voucher_page.dart';
 import 'setting_printer_page.dart';

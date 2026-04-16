@@ -1,3 +1,3 @@
 class Url {
-  static const String baseUrl = 'https://aditstywn.com/api';
+  static const String baseUrl = 'https://boothera.aditstywn.com/api';
 }

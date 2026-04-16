@@ -72,19 +72,15 @@ String _compressImageForUploadIsolate(Map<String, dynamic> params) {
 class PhotoBoothRemoteDatasource {
   final _driver = ApiDriver();
 
-  // static const int _maxTemplateLongEdge = 3200;
-  static const int _maxPhotoOriLongEdge = 1080;
-  // static const int _templateJpegQuality = 98;
-  static const int _photoOriJpegQuality = 65;
-  // static const int _templateMinCompressBytes = 5 * 1024 * 1024;
-  static const int _photoOriMinCompressBytes = 300 * 1024;
+  static const int _maxTemplateLongEdge = 1000;
+  static const int _maxPhotoOriLongEdge = 800;
+  static const int _jpegQuality = 50;
+  static const int _minCompressBytes = 200 * 1024;
 
   Future<File> _compressImageForUpload(
     File originalFile, {
     required String prefix,
     required int maxLongEdge,
-    required int jpegQuality,
-    required int minCompressBytes,
   }) async {
     if (!await originalFile.exists()) {
       return originalFile;
@@ -94,8 +90,8 @@ class PhotoBoothRemoteDatasource {
       'path': originalFile.path,
       'prefix': prefix,
       'maxLongEdge': maxLongEdge,
-      'jpegQuality': jpegQuality,
-      'minCompressBytes': minCompressBytes,
+      'jpegQuality': _jpegQuality,
+      'minCompressBytes': _minCompressBytes,
     });
 
     return File(compressedPath);
@@ -111,22 +107,19 @@ class PhotoBoothRemoteDatasource {
         return const Left('Foto template tidak ditemukan');
       }
 
-      // Compress template dengan kualitas tinggi
-      // final compressedTemplate = await _compressImageForUpload(
-      //   files.photoTemplate!,
-      //   prefix: 'photo_template',
-      //   maxLongEdge: _maxTemplateLongEdge,
-      //   jpegQuality: _templateJpegQuality,
-      //   minCompressBytes: _templateMinCompressBytes,
-      // );
+      final compressedTemplate = await _compressImageForUpload(
+        files.photoTemplate!,
+        prefix: 'photo_template',
+        maxLongEdge: _maxTemplateLongEdge,
+      );
 
-      // if (compressedTemplate.path != files.photoTemplate!.path) {
-      //   tempCompressedFiles.add(compressedTemplate);
-      // }
+      if (compressedTemplate.path != files.photoTemplate!.path) {
+        tempCompressedFiles.add(compressedTemplate);
+      }
 
       final photoTemplate = await http.MultipartFile.fromPath(
         'photo_template',
-        files.photoTemplate!.path,
+        compressedTemplate.path,
       );
 
       // final gifVidio = await http.MultipartFile.fromPath(
@@ -145,8 +138,6 @@ class PhotoBoothRemoteDatasource {
           originalPhoto,
           prefix: 'photo_ori',
           maxLongEdge: _maxPhotoOriLongEdge,
-          jpegQuality: _photoOriJpegQuality,
-          minCompressBytes: _photoOriMinCompressBytes,
         );
 
         if (compressedPhoto.path != originalPhoto.path) {
